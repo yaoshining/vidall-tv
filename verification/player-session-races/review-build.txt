@@ -1,0 +1,468 @@
+Ensure the project source is trustworthy before proceeding.
+
+[ohpm install] Running...
+install completed in 0s 66ms
+
+[hvigor sync] Skipped (configurations unchanged)
+
+[hvigor build] Running...
+> hvigor hvigor client: Starting hvigor daemon.
+> hvigor Hvigor Daemon started in 324 ms
+[build-env-inject-plugin] 已注入 SUBHUB_API_KEY（来自 local.properties）
+[build-env-inject-plugin] 已注入 SUBHUB_API_KEY（来自 local.properties）
+> hvigor UP-TO-DATE :entry:default@PreBuild...  
+> hvigor Finished :entry:default@CreateModuleInfo... after 1 ms 
+> hvigor UP-TO-DATE :entry:default@GenerateMetadata...  
+> hvigor Finished :entry:default@ConfigureCmake... after 118 ms 
+> hvigor UP-TO-DATE :entry:default@MergeProfile...  
+> hvigor UP-TO-DATE :entry:default@CreateBuildProfile...  
+> hvigor Finished :entry:default@PreCheckSyscap... after 1 ms 
+> hvigor Finished :entry:default@GeneratePkgSdkInfo... after 2 ms 
+> hvigor Finished :entry:default@ProcessIntegratedHsp... after 1 ms 
+> hvigor Finished :entry:default@BuildNativeWithCmake... after 9 ms 
+> hvigor UP-TO-DATE :entry:default@MakePackInfo...  
+> hvigor Finished :entry:default@SyscapTransform... after 9 ms 
+> hvigor UP-TO-DATE :entry:default@GeneratePkgContextInfo...  
+> hvigor UP-TO-DATE :entry:default@ProcessProfile...  
+> hvigor UP-TO-DATE :entry:default@ProcessRouterMap...  
+> hvigor UP-TO-DATE :entry:default@ProcessShareConfig...  
+> hvigor Finished :entry:default@ProcessStartupConfig... after 2 ms 
+> hvigor UP-TO-DATE :entry:default@ProcessResource...  
+> hvigor UP-TO-DATE :entry:default@GenerateLoaderJson...  
+> hvigor UP-TO-DATE :entry:default@CompileResource...  
+> hvigor Finished :entry:default@BuildJS... after 2 ms 
+> hvigor Finished :entry:default@BuildNativeWithNinja... after 55 ms 
+> hvigor UP-TO-DATE :entry:default@ProcessLibs...  
+> hvigor UP-TO-DATE :entry:default@DoNativeStrip...  
+> hvigor UP-TO-DATE :entry:default@CacheNativeLibs...  
+> hvigor WARN: WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/p2/q2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/g/t1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/g/h.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/f.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/r2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/m/y3.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/j1/v2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/j1/u2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/j1/k1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/y2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/z2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/x2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/j.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/k/q1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/s/o3.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/s/p3.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/q/w.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/q/i4.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/r1/s1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/k/x4.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/k/l.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/e.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/Index.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hadss+state_store@1.0.1/oh_modules/@hadss/state_store/src/main/ets/types/Actions.d.ets:11:36
+ Type notation using "this" is not supported (arkts-no-typing-with-this)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@hadss+state_store@1.0.1/oh_modules/@hadss/state_store/src/main/ets/types/Actions.d.ets:22:42
+ Type notation using "this" is not supported (arkts-no-typing-with-this)
+
+WARN: ArkTS:WARN: For details about ArkTS syntax errors, see FAQs
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:33:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:33:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.> hvigor Finished :entry:default@CompileArkTS... after 15 s 232 ms 
+> hvigor UP-TO-DATE :entry:default@GeneratePkgModuleJson...  
+> hvigor Finished :entry:default@ProcessCompiledResources... after 1 ms 
+ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:106:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:112:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:115:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/utils.ets:250:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestToast.ets:153:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestToast.ets:159:15
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestToast.ets:211:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestActionSheet.ets:410:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestActionSheet.ets:454:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestActionSheet.ets:471:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestImagePreview.ets:389:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestImagePreview.ets:395:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestImagePreview.ets:411:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestDialog.ets:395:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestDialog.ets:408:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestDialog.ets:451:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestNotify.ets:140:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestNotify.ets:144:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestNotify.ets:186:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/popup/index.ets:391:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/popup/index.ets:418:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/calendar/index.ets:644:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/field/index.ets:881:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:152:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:165:15
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:166:15
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:175:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/dialog/index.ets:322:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/dialog/index.ets:380:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/dropdownMenu/index.ets:202:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/guide/index.type.ets:229:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/guide/index.type.ets:230:66
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/waterMark/index.ets:171:38
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/waterMark/index.ets:171:59
+ 'getMediaContentBase64Sync' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/canvasDrawer/index.ets:92:38
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/canvasDrawer/index.ets:144:61
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/canvasDrawer/index.ets:144:82
+ 'getStringSync' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:157:22
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:166:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:173:16
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:174:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:177:24
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:243:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:244:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:245:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:506:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:523:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:931:26
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:935:18
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:42
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:53
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:86
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:99
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:939:21
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:943:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/utils/CryptoUtil.ets:31:16
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/utils/CryptoUtil.ets:32:13
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/utils/CryptoUtil.ets:50:27
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/utils/CryptoUtil.ets:89:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/CredentialStorage.ets:92:22
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/CredentialStorage.ets:94:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/CredentialStorage.ets:95:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/CredentialStorage.ets:96:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:376:23
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:377:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:378:23
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:378:39
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:389:13
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:397:13
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:405:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/VideoDao.ets:64:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/VideoDao.ets:93:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/VideoDao.ets:348:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:95:18
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:103:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:106:21
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:107:21
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:107:48
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:109:24
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:110:28
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:110:60
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:111:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:180:18
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:182:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:184:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/account/repo/CloudAccountRepository.ets:13:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/account/repo/CloudAccountRepository.ets:20:42
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/account/repo/CloudBindingRepository.ets:29:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/account/AgcCloudAuthService.ets:35:36
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/account/AgcCloudAuthService.ets:36:32
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/account/providers/HuaweiAuthProvider.ets:102:67
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/components/core/file/FileExplorer.ets:139:34
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/subtitle/SubtitleCacheManager.ets:209:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/subtitle/SubtitleDownloader.ets:146:22
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/subtitle/SubtitleDownloader.ets:150:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/subtitle/SubtitleDownloader.ets:154:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/lib/SubHubClient.ets:186:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/services/subtitleAcquisition/providers/OpenSubtitlesSubtitleProvider.ets:57:34
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:517:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:829:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:839:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:843:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:1182:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/scrape/LogTextViewerPage.ets:15:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/scrape/LogTextViewerPage.ets:24:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/components/scrape/ScrapeTaskIndicator.ets:60:24
+ 'showToast' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/components/scrape/ScrapeTaskIndicator.ets:64:22
+ 'showToast' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1210:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1215:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1220:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1263:7
+ Function may throw exceptions. Special handling is required.
+
+WARN:  ArkTS:WARN Property 'sourceMapsPath' not found in '@hw-agconnect/auth'. 
+WARN:  ArkTS:WARN Property 'sourceMapsPath' not found in '@hadss/state_store'. 
+
+> hvigor Finished :entry:default@PackageHap... after 995 ms 
+> hvigor Finished :entry:default@PackingCheck... after 18 ms 
+> hvigor Finished :entry:default@SignHap... after 1 s 429 ms 
+> hvigor Finished :entry:default@CollectDebugSymbol... after 1 ms 
+> hvigor Finished :entry:assembleHap... after 1 ms 
+> hvigor BUILD SUCCESSFUL in 20 s 16 ms 
+
+Merged central compile_commands.json for C++ language server.
+
+Build completed successfully

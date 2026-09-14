@@ -193,3 +193,29 @@ test('旧 reload 被新源替代，其 catch 不得拒绝新 reload',async()=>{
   await tick();const second=c.reloadSource(data('C'),false);await tick();c.player.callbacks.Ready();await second;
   assert.ok(await firstResult);assert.equal(c.name,'C');await c.release();
 });
+
+for (const latestSurface of ['surface-A', 'surface-B']) test(`MPV 首次绑定失败后处理有效并发请求：${latestSurface}`, async () => {
+  const f = fixture(), { c, FakeMpv } = f;
+  const { PlaybackBackendService } = f.loadProduction('services/playback/PlaybackBackendService.ets');
+  c.backendService = new PlaybackBackendService();
+  const p = new FakeMpv(), gate = deferred(), loads = [];
+  p.surface.onLoad = async (...args) => {
+    loads.push(args);
+    if (loads.length === 1) await gate.promise;
+  };
+  c.backend = 'mpv'; c.player = p; c.currentVideoData = data('A');
+  const first = c.setMpvSurface('surface-A', 1920, 1080);
+  await tick();
+  const latest = c.setMpvSurface(latestSurface, 1280, 720);
+  gate.reject(new Error('首次绑定失败'));
+  await Promise.all([first, latest]);
+  assert.deepEqual(loads, [['surface-A', 1920, 1080], [latestSurface, 1280, 720]]);
+  assert.equal(c.player, p);
+  assert.equal(c.isMpvSurfaceBound, true);
+  assert.equal(c.boundMpvSurfaceId, latestSurface);
+  assert.equal(p.src, data('A').videoSrc);
+  assert.equal(p.releases, 0);
+  await c.release();
+  assert.equal(p.releases, 1);
+  assert.equal(p.surface.destroys, 1);
+});

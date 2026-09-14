@@ -61,3 +61,9 @@ entry/src/test/player_session_races_test.cjs
 - 已开始的底层 init/onLoad/release 没有被取消。如果它永久不返回，后续实例创建会等待，避免在清理未完成时复用 native 资源；本轮未引入虚假的取消或超时后强行复用。
 - 已提交的 native 命令/偏好 put 不能撤销。旧实例的命令不得转向新实例；偏好写入按 key 排队保证顺序。
 - 全量既有平台单测与集成测试以 PR CI 的实际结果为准；构建、主机测试和模拟器冒烟均不能替代其门禁。最终 SHA 以 PR HEAD 和交付消息为准。
+
+## 2026-09-15 审查修复补充
+
+checkout 禁用凭据持久化；有效会话在旧 MPV 绑定失败后继续处理并发 surface 请求；catch 使用 BusinessError 断言。新增两个测试经过生产控制器和 PlaybackBackendService，仅替换 surface IO：同 surface 和不同 surface 的后续请求均在旧绑定失败后完成绑定，断言参数、实例归属及退出释放一次。修复前 2 项均失败（review-before.txt），修复后完整主机回归 38/38 通过（review-after.txt）。原 provenance.json 及模拟器证据属于 132849696，不作为本次修改的平台运行证据；本次未重装模拟器或操作用户应用数据。
+
+devecocli build --modules entry 构建通过（20 s 16 ms，review-build.txt）。构建不代表模拟器或真机播放验证。

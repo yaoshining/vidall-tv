@@ -22,5 +22,6 @@
     "entry/src/test/PlayerLifecycleCases.ets": "75936ba67d5c7bd4f0a4ad8498b8634cbd95bbd5d4289e045c61bab24bbb9747",
     "entry/src/test/player_session_fixture.cjs": "d88d4464132915841fc7adc93ddccf6a25e22e9a5efc98c3a3d54180063eda73",
     "entry/src/test/player_session_races_test.cjs": "661e0512322fa403bcc5606b8afa6b1970f0585f4cd99b3fde9a3e25bf6444b3"
-  }
+  },
+  "evidence_source_commit": "132849696a904f4af910c50a1c5cc4876d527736"
 }

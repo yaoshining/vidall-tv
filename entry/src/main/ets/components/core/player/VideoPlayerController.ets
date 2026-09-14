@@ -1542,8 +1542,8 @@ export class VideoPlayerController {
     const videoData = this.currentVideoData;
     if (this.mpvBindingPromise !== undefined) {
       await this.mpvBindingPromise.catch(() => {});
-      if (!this.isCurrentPlayer(sessionId, player) || !this.mpvSurfaceBound) { return; }
-      if (this.boundMpvSurfaceId !== surfaceId) {
+      if (!this.isCurrentPlayer(sessionId, player)) { return; }
+      if (!this.mpvSurfaceBound || this.boundMpvSurfaceId !== surfaceId) {
         await this.setMpvSurface(surfaceId, width, height);
       } else {
         this.notifyMpvSurfaceResize(width, height);
@@ -1565,7 +1565,8 @@ export class VideoPlayerController {
         this.boundMpvSurfaceId = surfaceId;
       } catch (e) {
         if (!isCurrent()) { return; }
-        this.handleTerminalPlayerError((e as Error).message);
+        const err = e as BusinessError;
+        this.handleTerminalPlayerError(err.message);
       } finally {
         if (isCurrent()) { this.mpvBindingPromise = undefined; }
       }
