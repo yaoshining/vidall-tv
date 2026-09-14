@@ -60,6 +60,8 @@ function qualityToLevel(quality: VpeQualityLevel): number {
  * - 单例：同时只能存在一个 VPE 实例
  */
 export class VpeEnhancerUtil {
+  private static _generation: number = 0;
+  static get generation(): number { return VpeEnhancerUtil._generation; }
   private static _isRunning: boolean = false;
   private static _supportChecked: boolean = false;
   private static _supported: boolean = false;
@@ -99,6 +101,7 @@ export class VpeEnhancerUtil {
     try {
       const inputSurfaceId = getVidAllCorePlayerNapi().createVpeDetailEnhancer(displaySurfaceId, level);
       if (inputSurfaceId && inputSurfaceId.length > 0) {
+        VpeEnhancerUtil._generation++;
         VpeEnhancerUtil._isRunning = true;
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `VPE 已创建: quality=${quality}(${level}) inputSurfaceId=${inputSurfaceId}`);
@@ -150,7 +153,8 @@ export class VpeEnhancerUtil {
    * 销毁 VPE 实例并释放资源。仅在播放器完全释放时调用。
    * ⚠️ 不要在播放中途调用：会摧毁 AVPlayer 正在使用的输入 Surface，导致画面冻结。
    */
-  static destroyEnhancer(): void {
+  static destroyEnhancer(expectedGeneration?: number): void {
+    if (expectedGeneration !== undefined && expectedGeneration !== VpeEnhancerUtil._generation) { return; }
     if (!VpeEnhancerUtil._isRunning) {
       return;
     }

@@ -530,7 +530,8 @@ export class AudioTrackRoutingService {
    */
   async resolveInitialTrackIndex(
     videoPath: string,
-    audioTracks: AudioTrackItem[]
+    audioTracks: AudioTrackItem[],
+    isCurrent: () => boolean = (): boolean => true
   ): Promise<InitialTrackIndexResult> {
     if (audioTracks.length === 0) {
       return { trackIndex: 0, source: 'all-unplayable', shouldClearUserBinding: false };
@@ -562,7 +563,8 @@ export class AudioTrackRoutingService {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `绑定 displayName 不在轨道列表中，自动清除: ${userBinding.displayName}`);
       try {
-        await this.audioDispatcher.clearAudioBinding(videoPath);
+        if (!isCurrent()) { return { trackIndex: 0, source: 'all-unplayable', shouldClearUserBinding: false }; }
+        await this.audioDispatcher.clearAudioBinding(videoPath, isCurrent);
       } catch (e) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `清除失效绑定失败: ${String(e)}`);
       }

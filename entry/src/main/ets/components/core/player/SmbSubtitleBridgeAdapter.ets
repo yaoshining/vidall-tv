@@ -380,11 +380,15 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
    * 外置字幕交由父类处理（srtEntries 已在 loadExternalTracks 解析完毕）。
    */
   override async switchTrack(allIndex: number): Promise<void> {
+    const lifecycle = this.lifecycleGeneration;
+    const currentGen = ++this.subtitleSwitchGeneration;
+    this.selectionGeneration++;
     if (!this.player) {
       return;
     }
     if (allIndex < 0) {
       await this.player?.selectTrack(-1);
+      if (lifecycle !== this.lifecycleGeneration || currentGen !== this.subtitleSwitchGeneration) { return; }
       await super.switchTrack(allIndex);
       return;
     }
@@ -401,8 +405,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       return;
     }
     await this.player?.selectTrack(-1);
-    this.subtitleSwitchGeneration += 1;
-    const currentGen = this.subtitleSwitchGeneration;
+    if (lifecycle !== this.lifecycleGeneration || currentGen !== this.subtitleSwitchGeneration) { return; }
     this.activeSubtitleIndex = allIndex;
     this.srtEntries = [];
     this.lastSrtText = '';
@@ -424,7 +427,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const entries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
         videoSrc, undefined, internalIndex, 90000
       );
-      if (currentGen !== this.subtitleSwitchGeneration) {
+      if (lifecycle !== this.lifecycleGeneration || currentGen !== this.subtitleSwitchGeneration) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           '[SmbSub] 字幕提取结果已过期，丢弃（generation 不匹配）');
         return;
@@ -459,7 +462,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     } catch {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         '[SmbSub] 内嵌字幕提取失败，尝试 fallback 到外置字幕');
-      if (currentGen === this.subtitleSwitchGeneration) {
+      if (lifecycle === this.lifecycleGeneration && currentGen === this.subtitleSwitchGeneration) {
         const externalIdx: number = this.allSubtitleTracks.findIndex(
           (t: SubtitleTrackItem) => t.kind === 'external'
         );

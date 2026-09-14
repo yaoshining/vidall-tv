@@ -140,7 +140,8 @@ export class SubtitleDispatcher {
   async saveUserBinding(
     videoPath: string,
     subtitlePath: string,
-    type: SubtitleBindingType
+    type: SubtitleBindingType,
+    isCurrent: () => boolean = (): boolean => true
   ): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
@@ -150,7 +151,7 @@ export class SubtitleDispatcher {
         subtitleType: type,
         savedAt: Date.now()
       };
-      await AppPreferences.set(key, JSON.stringify(binding));
+      await AppPreferences.setGuarded(key, JSON.stringify(binding), isCurrent);
     } catch (e) {
       console.error(`[SubtitleDispatcher] saveUserBinding 失败: ${String(e)}`);
     }
@@ -175,7 +176,8 @@ export class SubtitleDispatcher {
    * `clearUserBindingForce`（直接清空 key），避免误写 disabled 标记导致
    * 下次进入同一视频时字幕被强制关闭。
    */
-  async clearUserBinding(videoPath: string): Promise<void> {
+  async clearUserBinding(videoPath: string,
+    isCurrent: () => boolean = (): boolean => true): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
       const binding: SubtitleBinding = {
@@ -184,7 +186,7 @@ export class SubtitleDispatcher {
         subtitleType: 'disabled',
         savedAt: Date.now()
       };
-      await AppPreferences.set(key, JSON.stringify(binding));
+      await AppPreferences.setGuarded(key, JSON.stringify(binding), isCurrent);
     } catch (e) {
       console.error(`[SubtitleDispatcher] clearUserBinding 失败: ${String(e)}`);
     }
@@ -202,10 +204,11 @@ export class SubtitleDispatcher {
    *
    * 失败仅 warn，不抛。
    */
-  async clearUserBindingForce(videoPath: string): Promise<void> {
+  async clearUserBindingForce(videoPath: string,
+    isCurrent: () => boolean = (): boolean => true): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
-      await AppPreferences.set(key, '');
+      await AppPreferences.setGuarded(key, '', isCurrent);
     } catch (e) {
       console.error(`[SubtitleDispatcher] clearUserBindingForce 失败: ${String(e)}`);
     }
@@ -228,7 +231,8 @@ export class SubtitleDispatcher {
   async resolveSubtitle(
     videoPath: string,
     allSubtitleTracks: SubtitleTrackItem[],
-    cacheContext?: SubtitleCacheContext
+    cacheContext?: SubtitleCacheContext,
+    isCurrent: () => boolean = (): boolean => true
   ): Promise<SubtitleResolution> {
     // 步骤 1：用户指定字幕
     try {
@@ -262,7 +266,7 @@ export class SubtitleDispatcher {
             // 会在后续 resolveSubtitle 步骤 1 短路返回 trackIndex=-1，错误地把"轨道列表变化/绑定失效"
             // 当作"用户主动关闭"处理，导致下次进入同一视频时字幕被强制关闭。
             // 失效清理应当让 adapter / 缓存字幕按正常流程接管，而非继承 disabled 状态。
-            await this.clearUserBindingForce(videoPath);
+            await this.clearUserBindingForce(videoPath, isCurrent);
           }
         } else if (binding.subtitleType === 'internal') {
           // 内置字幕：优先按 @idx token 精确匹配 internalIndex，兼容历史 displayName 匹配。
@@ -309,7 +313,7 @@ export class SubtitleDispatcher {
           } else {
             console.warn(`[SubtitleDispatcher] 绑定 displayName 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
             // 同样：失效清理使用 clearUserBindingForce，避免误写 disabled 标记导致下次进入视频时字幕被强制关闭。
-            await this.clearUserBindingForce(videoPath);
+            await this.clearUserBindingForce(videoPath, isCurrent);
           }
         }
         // downloaded / cached → step 4 处理

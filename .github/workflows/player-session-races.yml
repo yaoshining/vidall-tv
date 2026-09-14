@@ -1,0 +1,29 @@
+name: 播放器异步生命周期竞态回归
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  player-session-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 安装主机转译依赖
+        run: npm install --prefix "$RUNNER_TEMP/player-session-test" --no-package-lock --ignore-scripts typescript@5.6.3
+      - name: 执行生产控制器及会话服务 deferred 回归
+        env:
+          TYPESCRIPT_PATH: ${{ runner.temp }}/player-session-test/node_modules/typescript
+        run: node --test entry/src/test/player_session_races_test.cjs

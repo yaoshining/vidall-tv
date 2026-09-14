@@ -1,0 +1,27 @@
+{
+  "baseline": "3818ef2e9a4d0762c0f2e7a7c67ef804004776ce",
+  "host_cases": 36,
+  "emulator_cases": 4,
+  "emulator": "Huawei_TV_6_1_1 / HarmonyOS 6.1.1 API 24",
+  "production_build": "devecocli build --modules entry: BUILD SUCCESSFUL in 10 s 400 ms",
+  "platform_build": "devecocli build --modules entry@ohosTest: success",
+  "data_cleanup": "bm uninstall -n com.yao.vidalltv -m entry_test -k; bm dump confirmed entry still installed; emulator stopped",
+  "source_sha256": {
+    "entry/src/main/ets/audio/AudioDispatcher.ets": "054b802dc1a8ca159f0f050a3e5e9eee9cdf521378f1e077d8ac6dd3620541c8",
+    "entry/src/main/ets/components/core/player/SmbSubtitleBridgeAdapter.ets": "e44e48d52598fe380c769ab0296ec0bc695ae23ce9a07428e6edbe1e9d85947f",
+    "entry/src/main/ets/components/core/player/SubtitleBridgeAdapter.ets": "7415e8c00007433e529f95998141cd8ed4a66e1987fc4f46a446f907e83c5b3d",
+    "entry/src/main/ets/components/core/player/VidAllPlayerAdapter.ets": "6142268248c53ac618223d27e367dda0c005eb6aec643bcb06376f48b15eb2ed",
+    "entry/src/main/ets/components/core/player/VideoPlayerController.ets": "d9ca52b6cc5586996757fa3e7e4a590d3d35ffceff57f78c3f7d7df566222e5b",
+    "entry/src/main/ets/services/audioRouting/AudioTrackRoutingService.ets": "d56f3eebec8dd26e6d79895aca6eb5009346de741afeb1ff372289cb495ca028",
+    "entry/src/main/ets/services/playback/PlaybackBackendService.ets": "deb33470529c9b8d2ff51f13471098de5de97ecc0f19a1cbdc8aa72310bbc425",
+    "entry/src/main/ets/services/playback/PlaybackBackendTypes.ets": "9f94d0abf52f7000b781cc865943a1ab5f98b33cedbe83f60fe5ab3b127bda84",
+    "entry/src/main/ets/services/subtitleSession/SubtitleSessionService.ets": "1c0c7ba984cbfae5599db96e6a2a782af7333f8480e589f381b9ab8660e90e90",
+    "entry/src/main/ets/subtitle/SubtitleDispatcher.ets": "e2f1248b398147f49820c164b44f2c64e3bd65f9323c27be20ef68aeb0021df5",
+    "entry/src/main/ets/utils/AppPreferences.ets": "4ae682d3061c2c99db41edb4b1e4d83376af1f48481ddf422ac2301bcc931981",
+    "entry/src/main/ets/utils/VpeEnhancerUtil.ets": "d407acf76ab82cb1b312d693ffbcdb5197232205d7388f5f4fda82ea98d0d52d",
+    "entry/src/test/PlayerLifecycleCases.ets": "75936ba67d5c7bd4f0a4ad8498b8634cbd95bbd5d4289e045c61bab24bbb9747",
+    "entry/src/test/player_session_fixture.cjs": "d88d4464132915841fc7adc93ddccf6a25e22e9a5efc98c3a3d54180063eda73",
+    "entry/src/test/player_session_races_test.cjs": "661e0512322fa403bcc5606b8afa6b1970f0585f4cd99b3fde9a3e25bf6444b3"
+  },
+  "evidence_source_commit": "132849696a904f4af910c50a1c5cc4876d527736"
+}

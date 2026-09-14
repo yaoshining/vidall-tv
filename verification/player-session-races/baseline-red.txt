@@ -1,0 +1,148 @@
+✖ 媒体标识乱序：旧结果不能覆盖新源、媒体标识或实例 (225.845917ms)
+✖ media 等待中退出，不得重建实例 (116.102167ms)
+✖ routing 等待中退出，不得重建实例 (103.249125ms)
+✖ 旧音轨枚举不能污染新列表或对新实例选轨 (97.886666ms)
+✖ 退出后旧回调不能改变状态 (95.974625ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 0
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 778.507958
+
+✖ failing tests:
+
+test at entry/src/test/player_session_races_test.cjs:5:1
+✖ 媒体标识乱序：旧结果不能覆盖新源、媒体标识或实例 (225.845917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'A' !== 'B'
+  
+      at TestContext.<anonymous> (/Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/test/player_session_races_test.cjs:11:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'A',
+    expected: 'B',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at entry/src/test/player_session_races_test.cjs:14:40
+✖ media 等待中退出，不得重建实例 (116.102167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + FakePlayer {
+  +   callbacks: {
+  +     Buffering: [Function (anonymous)],
+  +     Completed: [Function (anonymous)],
+  +     Error: [Function (anonymous)],
+  +     Paused: [Function (anonymous)],
+  +     Play: [Function (anonymous)],
+  +     Ready: [Function (anonymous)],
+  +     SeekDone: [Function (anonymous)],
+  +     Stopped: [Function (anonymous)],
+  +     SubtitleUpdate: [Function (anonymous)],
+  +     TimeUpdate: [Function (anonymous)],
+  +     UnsupportedFormat: [Function (anonymous)]
+  +   },
+  +   currentTime: 0,
+  +   duration: 120000,
+  +   pauses: 0,
+  +   plays: 0,
+  +   releases: 0,
+  +   seeks: [],
+  +   selected: [],
+  +   src: 'https://example.test/A'
+  + }
+  - undefined
+  
+      at TestContext.<anonymous> (/Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/test/player_session_races_test.cjs:19:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [FakePlayer],
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at entry/src/test/player_session_races_test.cjs:14:40
+✖ routing 等待中退出，不得重建实例 (103.249125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + FakePlayer {
+  +   callbacks: {
+  +     Buffering: [Function (anonymous)],
+  +     Completed: [Function (anonymous)],
+  +     Error: [Function (anonymous)],
+  +     Paused: [Function (anonymous)],
+  +     Play: [Function (anonymous)],
+  +     Ready: [Function (anonymous)],
+  +     SeekDone: [Function (anonymous)],
+  +     Stopped: [Function (anonymous)],
+  +     SubtitleUpdate: [Function (anonymous)],
+  +     TimeUpdate: [Function (anonymous)],
+  +     UnsupportedFormat: [Function (anonymous)]
+  +   },
+  +   currentTime: 0,
+  +   duration: 120000,
+  +   pauses: 0,
+  +   plays: 0,
+  +   releases: 0,
+  +   seeks: [],
+  +   selected: [],
+  +   src: 'https://example.test/A'
+  + }
+  - undefined
+  
+      at TestContext.<anonymous> (/Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/test/player_session_races_test.cjs:19:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [FakePlayer],
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at entry/src/test/player_session_races_test.cjs:45:1
+✖ 旧音轨枚举不能污染新列表或对新实例选轨 (97.886666ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (/Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/test/player_session_races_test.cjs:49:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at entry/src/test/player_session_races_test.cjs:66:1
+✖ 退出后旧回调不能改变状态 (95.974625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'paused' !== 'idle'
+  
+      at TestContext.<anonymous> (/Users/yaoshining/.codex/worktrees/9cbd/VidAll_TV/entry/src/test/player_session_races_test.cjs:69:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'paused',
+    expected: 'idle',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

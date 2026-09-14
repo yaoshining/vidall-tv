@@ -74,6 +74,8 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _pendingXComponentId: string = '';
   private _timeUpdateTimer?: number;
   private _playerHandle: number = 0;
+  private static _smbProxyGeneration: number = 0;
+  static get smbProxyGeneration(): number { return VidAllPlayerAdapter._smbProxyGeneration; }
   private static _smbProxyHandle: number = 0;
   private _lastDurationUnknownSeekLogMs: number = 0;
   private _enableSeekDiagLog: boolean = false;
@@ -349,6 +351,7 @@ export class VidAllPlayerAdapter implements IPlayer {
    */
   static startSmbProxy(smbUrl: string): string {
     VidAllPlayerAdapter.releaseSmbProxy();
+    VidAllPlayerAdapter._smbProxyGeneration++;
     let handle: number = 0;
     try {
       handle = VidAllCorePlayerNapi.createPlayer();
@@ -385,7 +388,8 @@ export class VidAllPlayerAdapter implements IPlayer {
   }
 
   /** 停止当前独立 SMB HTTP 代理并执行普通 player release。 */
-  static releaseSmbProxy(): void {
+  static releaseSmbProxy(expectedGeneration?: number): void {
+    if (expectedGeneration !== undefined && expectedGeneration !== VidAllPlayerAdapter._smbProxyGeneration) { return; }
     const handle = VidAllPlayerAdapter._smbProxyHandle;
     if (handle <= 0) {
       return;

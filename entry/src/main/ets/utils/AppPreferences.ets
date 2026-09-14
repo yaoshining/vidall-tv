@@ -191,6 +191,25 @@ export class AppPreferences {
     }
   }
 
+  private static guardedWrites: Map<string, Promise<void>> = new Map();
+
+  /** 播放选择持久化：等待 store 后重新验证；已提交的 put 无法取消，同 key 后续写入排队。 */
+  static setGuarded(key: string, value: string | number, isCurrent: () => boolean): Promise<void> {
+    const previous = AppPreferences.guardedWrites.get(key) ?? Promise.resolve();
+    const write = previous.catch(() => {}).then(async () => {
+      const store = await AppPreferences.waitForStore();
+      if (!store || !isCurrent()) { return; }
+      await store.put(key, value);
+      await store.flush();
+    });
+    AppPreferences.guardedWrites.set(key, write);
+    const clear = (): void => {
+      if (AppPreferences.guardedWrites.get(key) === write) { AppPreferences.guardedWrites.delete(key); }
+    };
+    write.then(clear, clear);
+    return write;
+  }
+
   /** 写入值（string 或 number） */
   static async set(key: string, value: string | number): Promise<void> {
     const store = await AppPreferences.waitForStore();
