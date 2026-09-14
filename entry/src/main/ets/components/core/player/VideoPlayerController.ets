@@ -237,6 +237,13 @@ export interface AudioTrackItem {
 
 export type UnsupportedFormatFallback = 'mpv';
 
+interface RetiredPlayerResources {
+  player: IPlayer;
+  initialization: Promise<void>;
+  smbProxyGeneration?: number;
+  vpeGeneration?: number;
+}
+
 @ObservedV2
 export class VideoPlayerController {
   /** 运行时播放后端：AVPlayer 主路径，MPV 唯一回退路径。 */
@@ -260,6 +267,79 @@ export class VideoPlayerController {
   private displayHeight: number = 0;
 
   private player?: IPlayer;
+  // 实例从共享字段同步摘取；只等待已经开始的初始化，不声称取消底层 IO。
+  private smbProxyGeneration?: number;
+  private vpeGeneration?: number;
+  private playerInitialization: Promise<void> = Promise.resolve();
+  private retiredPlayers: RetiredPlayerResources[] = [];
+  private resourceCleanup: Promise<void> = Promise.resolve();
+  private retainedMpvSurface?: MpvPlayerAdapter;
+  private mpvBindingPromise?: Promise<void>;
+  private audioSelectionVersion: number = 0;
+  private subtitleSelectionVersion: number = 0;
+
+  private isCurrentPlayer(sessionId: number, player: IPlayer | undefined): boolean {
+    return sessionId === this.playbackSessionId && player === this.player;
+  }
+
+  /** 必须在会话编号失效后、首个 await 前调用。 */
+  private detachPlayerResources(): void {
+    const player = this.player;
+    this.player = undefined;
+    if (player !== undefined) {
+      this.retiredPlayers.push({ player, initialization: this.playerInitialization,
+        smbProxyGeneration: this.smbProxyGeneration, vpeGeneration: this.vpeGeneration });
+    }
+    this.smbProxyGeneration = undefined;
+    this.vpeGeneration = undefined;
+    this.playerInitialization = Promise.resolve();
+    this.mpvBindingPromise = undefined;
+    this.subtitleAdapter.release();
+    this.subtitleAdapter = new NoSubtitleBridgeAdapter();
+    this.subtitleSessionSvc.reset();
+    this.audioSelectionVersion++;
+    this.subtitleSelectionVersion++;
+    this.stopProgressTimer();
+    this.clearResumeSeekAutoplayFallbackState();
+    if (this.subtitleClearTimer !== undefined) {
+      clearTimeout(this.subtitleClearTimer);
+      this.subtitleClearTimer = undefined;
+    }
+    this.subtitleRemainingTime = 0;
+    this.isReady = false;
+    this.isPlaying = false;
+    this.isSeeking = false;
+  }
+
+  /** 新实例必须等待此队列，代理/VPE/NativeWindow 清理不得晚于新资源创建。 */
+  private drainRetiredPlayers(preserveMpvSurface: boolean): Promise<void> {
+    const retired = this.retiredPlayers;
+    this.retiredPlayers = [];
+    this.resourceCleanup = this.resourceCleanup.then(async () => {
+      for (const resources of retired) {
+        await resources.initialization.catch(() => {});
+        const player = resources.player;
+        if (preserveMpvSurface && player instanceof MpvPlayerAdapter) {
+          await player.softRelease().catch(() => {});
+          this.retainedMpvSurface = player;
+        } else {
+          await player.release().catch(() => {});
+        }
+        if (resources.smbProxyGeneration !== undefined) {
+          VidAllPlayerAdapter.releaseSmbProxy(resources.smbProxyGeneration);
+        }
+        if (resources.vpeGeneration !== undefined) {
+          VpeEnhancerUtil.destroyEnhancer(resources.vpeGeneration);
+        }
+      }
+      if (!preserveMpvSurface && this.retainedMpvSurface !== undefined) {
+        const retained = this.retainedMpvSurface;
+        this.retainedMpvSurface = undefined;
+        await retained.getSurfaceAdapter().onDestroy().catch(() => {});
+      }
+    });
+    return this.resourceCleanup;
+  }
   readonly unsupportedFormatFallback: UnsupportedFormatFallback = 'mpv';
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
@@ -297,6 +377,8 @@ export class VideoPlayerController {
   @Trace playbackSpeed: number = 1.0;
   /** 源重载事务（收敛原 pendingReloadToken/activeReloadToken/reloadTimeoutId/pendingReloadResolve/pendingReloadReject） */
   private readonly reloadSession: ReloadSession = new ReloadSession();
+  private reloadRequestId: number = 0;
+  private reloadVideoData?: VideoData;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private readonly subtitleDispatcher: SubtitleDispatcher = new SubtitleDispatcher();
   /** 字幕缓存上下文，由外部（player page）注入后用于步骤 4 缓存查询 */
@@ -637,8 +719,14 @@ export class VideoPlayerController {
 
   /** 初始化 AVPlayer 主路径或 MPV 回退路径。 */
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
+    if (this.reloadVideoData !== undefined && this.reloadVideoData !== videoData) {
+      this.reloadRequestId++;
+      this.reloadVideoData = undefined;
+      this.rejectPendingReload(new Error('reload superseded'));
+    }
     this.playbackSessionId += 1;
     const currentSessionId = this.playbackSessionId;
+    this.detachPlayerResources();
     this.metricsLoadStartMs = Date.now();
     this.metricsMedia = null;
     const previousSourceKey = this.buildPendingResumeSourceKey(this.currentVideoData);
@@ -652,11 +740,6 @@ export class VideoPlayerController {
     }
     // 先重置可展示状态，避免在异步预处理期间继续暴露上次播放残留。
     this.resetDisplayState();
-    // 在适配器注册回调前提前查询媒体标识，回调内同步使用，避免异步改造回调签名
-    const metricsVideoId = this.progressContext?.videoId;
-    if (metricsVideoId !== undefined && metricsVideoId > 0) {
-      this.metricsMedia = await this.buildMediaIdentity(metricsVideoId);
-    }
     this.hasPrepared = false;
     this._isInitialTrackSelection = false;
     this.name = videoData.name || ''
@@ -680,6 +763,14 @@ export class VideoPlayerController {
         `[session=${currentSessionId}] initPlayer start backend=${this.backend}`);
     }
 
+    // 在适配器注册回调前提前查询媒体标识，回调内同步使用，避免异步改造回调签名
+    const metricsVideoId = this.progressContext?.videoId;
+    if (metricsVideoId !== undefined && metricsVideoId > 0) {
+      const mediaIdentity = await this.buildMediaIdentity(metricsVideoId);
+      if (currentSessionId !== this.playbackSessionId) { return; }
+      this.metricsMedia = mediaIdentity;
+    }
+
     // Route selection always resolves to AVPlayer or MPV; MPV is the only fallback.
     this.transitionTo(PlaybackState.ROUTING);
     const backendBeforeAutoRouting = this.backend;
@@ -696,10 +787,8 @@ export class VideoPlayerController {
     if (decision.precheckProbeFailed && this.isFileNotFoundMessage(decision.precheckProbeError)) {
       const missingVideoId = this.progressContext?.videoId ?? -1;
       // 释放可能残留的旧播放器并重置播放状态，避免提前返回导致旧 player 与状态泄漏
-      if (this.player) {
-        await this.player.release().catch(() => {});
-        this.player = undefined;
-      }
+      await this.drainRetiredPlayers(false);
+      if (currentSessionId !== this.playbackSessionId) { return; }
       this.isReady = false;
       this.isPlaying = false;
       this.isSeeking = false;
@@ -766,18 +855,10 @@ export class VideoPlayerController {
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"play_start","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"file":"${this.extractFileName(videoData.videoSrc ?? '')}","ts":${this.metricsLoadStartMs}}`);
 
-    // 释放旧 player
-    // MPV 后端切集时使用 softRelease()：只释放 mpv 播放器实例，
-    // 不销毁 XComponent 的 NativeWindow（surfaceAdapter.onDestroy），
-    // 避免新 adapter 的 CreateNativeWindowFromSurfaceId 失败。
-    if (this.player) {
-      if (this.backend === 'mpv' && this.player instanceof MpvPlayerAdapter) {
-        await (this.player as MpvPlayerAdapter).softRelease().catch(() => {});
-      } else {
-        await this.player.release().catch(() => {});
-      }
-      this.player = undefined;
-    }
+    await this.drainRetiredPlayers(this.backend === 'mpv');
+    if (currentSessionId !== this.playbackSessionId) { return; }
+    // 同一个 XComponent 的 NativeWindow 现在交给新 MPV 实例。
+    this.retainedMpvSurface = undefined;
 
     // 重置状态
     this.isReady = false;
@@ -865,6 +946,7 @@ export class VideoPlayerController {
           }
         }
       );
+      this.smbProxyGeneration = adapterHandle.smbProxyGeneration;
       this.sourceProtocol = videoData.videoSrc.startsWith('smb://') ? 'SMB' : this.sourceProtocol;
       // SMB 代理启动后，将代理 URL 写回 videoData，确保后续 init/setSurface 使用代理 URL
       if (adapterHandle.effectiveVideoSrc.length > 0 &&
@@ -901,8 +983,12 @@ export class VideoPlayerController {
           `[session=${currentSessionId}] 忽略过期 onReady`);
         return;
       }
-      this.onPlayerReady();
-      this.resolvePendingReload();
+      this.onPlayerReady().catch((error: Error) => {
+        if (this.isCurrentPlayer(currentSessionId, p)) {
+          this.handleTerminalPlayerError(error.message);
+        }
+      });
+      if (this.isCurrentPlayer(currentSessionId, p)) { this.resolvePendingReload(); }
     });
     p.onPlay(() => {
       this.handlePlayerPlayEvent(currentSessionId);
@@ -1181,8 +1267,14 @@ export class VideoPlayerController {
     } else {
       const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
       try {
-        await this.player?.init(videoData, effectiveSurfaceId);
+        const initialization = Promise.resolve().then(async () => {
+          if (!this.isCurrentPlayer(currentSessionId, p)) { return; }
+          await p.init(videoData, effectiveSurfaceId);
+        });
+        this.playerInitialization = initialization;
+        await initialization;
       } catch (e) {
+        if (!this.isCurrentPlayer(currentSessionId, p)) { return; }
         const err = e as BusinessError;
         this.fallbackAvPlayerToMpv('avplayer_init_failure', err.message ?? 'AVPlayer init failed');
       }
@@ -1391,6 +1483,7 @@ export class VideoPlayerController {
     }
     this.aiEnhanceQuality = resolvedQuality;
     const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, resolvedQuality);
+    if (vpeSurfaceId.length > 0) { this.vpeGeneration = VpeEnhancerUtil.generation; }
     const effectiveSurfaceId = resolveEffectivePlaybackSurfaceId(displaySurfaceId, vpeSurfaceId);
     if (effectiveSurfaceId !== displaySurfaceId) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -1444,22 +1537,37 @@ export class VideoPlayerController {
     this.pendingMpvSurfaceId = '';
     this.pendingMpvSurfaceWidth = 0;
     this.pendingMpvSurfaceHeight = 0;
-    if (this.currentVideoData) {
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const videoData = this.currentVideoData;
+    if (this.mpvBindingPromise !== undefined) {
+      await this.mpvBindingPromise.catch(() => {});
+      if (!this.isCurrentPlayer(sessionId, player) || !this.mpvSurfaceBound) { return; }
+      if (this.boundMpvSurfaceId !== surfaceId) {
+        await this.setMpvSurface(surfaceId, width, height);
+      } else {
+        this.notifyMpvSurfaceResize(width, height);
+      }
+      return;
+    }
+    if (videoData !== undefined) {
+      const isCurrent = (): boolean => this.isCurrentPlayer(sessionId, player);
+      const binding = Promise.resolve().then(async () => {
+        if (!isCurrent()) { return; }
+        await this.backendService.bindMpvContext(player, surfaceId, videoData, width, height, isCurrent);
+      });
+      this.mpvBindingPromise = binding;
+      this.playerInitialization = binding;
       try {
-        await this.backendService.bindMpvContext(
-          this.player,
-          surfaceId,
-          this.currentVideoData,
-          width,
-          height
-        );
+        await binding;
+        if (!isCurrent()) { return; }
         this.mpvSurfaceBound = true;
         this.boundMpvSurfaceId = surfaceId;
       } catch (e) {
-        const err = e as Error;
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `setMpvSurface init 失败: ${err.message}`);
-        this.handleTerminalPlayerError(err.message);
+        if (!isCurrent()) { return; }
+        this.handleTerminalPlayerError((e as Error).message);
+      } finally {
+        if (isCurrent()) { this.mpvBindingPromise = undefined; }
       }
     }
   }
@@ -1495,27 +1603,37 @@ export class VideoPlayerController {
     }
     this.clearPendingResumeState();
     this.rejectPendingReload(new Error('reload superseded'));
+    const requestId = ++this.reloadRequestId;
+    this.reloadVideoData = videoData;
     if (autoPlay) {
       this.prepareResumeAutoplayDecision(true, 'reload_source_autoplay');
     }
     const reloadPromise = new Promise<void>((resolve, reject) => {
       this.reloadSession.begin(resolve, reject);
     });
+    reloadPromise.catch(() => {});
+    const initialization = this.initPlayer(videoData, this.surfaceId);
     try {
-      await this.initPlayer(videoData, this.surfaceId);
+      await initialization;
+      if (requestId !== this.reloadRequestId) { throw new Error('reload superseded'); }
       if (this.backend === 'mpv') {
         this.mpvSurfaceBound = false;
         await this.setMpvSurface(this.surfaceId, this.mpvSurfaceWidth, this.mpvSurfaceHeight);
       }
       await reloadPromise;
+      if (requestId !== this.reloadRequestId) { throw new Error('reload superseded'); }
       if (autoPlay) {
         await this.play();
       }
     } catch (error) {
       const reloadError = error instanceof Error ? error : new Error(String(error));
-      this.clearResumeAutoplayDecisionLifecycle();
-      this.rejectPendingReload(reloadError);
+      if (requestId === this.reloadRequestId) {
+        this.clearResumeAutoplayDecisionLifecycle();
+        this.rejectPendingReload(reloadError);
+      }
       throw reloadError;
+    } finally {
+      if (requestId === this.reloadRequestId) { this.reloadVideoData = undefined; }
     }
   }
 
@@ -1608,6 +1726,7 @@ export class VideoPlayerController {
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
     const readySessionId = this.playbackSessionId;
+    const readyPlayer = this.player;
     const readyResumeToken = `${readySessionId}:${this.backend}`;
     if (this.consumedReadyResumeToken === readyResumeToken) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
@@ -1679,6 +1798,7 @@ export class VideoPlayerController {
             `onPlayerReady: MPV pause 异常: ${(e as BusinessError).message ?? 'unknown'}`);
         }
       }
+      if (!this.isCurrentPlayer(readySessionId, readyPlayer)) { return; }
       this.currentTime = safeResumeTimeMs;
       this.progress = this.duration > 0 ? safeResumeTimeMs / this.duration : 0;
       this.subtitleAdapter.onSeekSync();
@@ -1703,6 +1823,7 @@ export class VideoPlayerController {
     emitter.emit(PlayerEvents.PREPARED);
 
     await this.finalizePlayerReadyTrackInitialization(readySessionId);
+    if (!this.isCurrentPlayer(readySessionId, readyPlayer)) { return; }
     if (pendingResumeState !== null && pendingResumeState.shouldResumePlay && !this.isPlaying) {
       this.primePendingResumeAutoplayResult(resumeSource, resumeCaptureBackend, resumeTimeMs,
         effectiveResumeTimeMs, shouldResumePlay, 'play_no_seek', resumeAutoplayDecisionSource,
@@ -1741,7 +1862,7 @@ export class VideoPlayerController {
       }
       this.recordSubtitleUsageAtPlaybackStart();
     } finally {
-      this._isInitialTrackSelection = false;
+      if (sessionId === this.playbackSessionId) { this._isInitialTrackSelection = false; }
     }
   }
 
@@ -1863,11 +1984,10 @@ export class VideoPlayerController {
     if (this.currentVideoData !== undefined && this.currentOriginalVideoSrc.startsWith('smb://')) {
       this.currentVideoData.videoSrc = this.currentOriginalVideoSrc;
     }
-    const oldPlayer = this.player;
-    this.player = undefined;
-    VidAllPlayerAdapter.releaseSmbProxy();
+    this.playbackSessionId++;
+    this.detachPlayerResources();
     this.backend = 'mpv';
-    oldPlayer?.release().catch(() => {});
+    this.drainRetiredPlayers(false).catch(() => {});
   }
 
   private handleTerminalPlayerError(message: string): void {
@@ -2053,11 +2173,15 @@ export class VideoPlayerController {
       this.recordPendingResumeAutoplayResult('play_no_player', true);
       return;
     }
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
     try {
-      await this.player.play();
-      this.duration = this.player.duration;
+      await player.play();
+      if (!this.isCurrentPlayer(sessionId, player)) { return; }
+      this.duration = player.duration;
       this.recordPendingResumeAutoplayResult('play_requested', false);
     } catch (err) {
+      if (!this.isCurrentPlayer(sessionId, player)) { return; }
       const playError = err as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `play 失败: code=${playError.code} msg=${playError.message}`);
@@ -2097,28 +2221,27 @@ export class VideoPlayerController {
   }
 
   async release(): Promise<void> {
+    this.reloadRequestId++;
+    this.reloadVideoData = undefined;
+    this.playbackSessionId++;
+    const sessionId = this.playbackSessionId;
     this.transitionTo(PlaybackState.RELEASING);
     this.rejectPendingReload(new Error('player released'));
-    this.resumeSession.result = null;
-    this.clearResumeSeekAutoplayFallbackState();
-    this.stopProgressTimer();
     this.saveProgressNow();
-    // 重置 MPV surface 绑定状态，避免后续绑定被误判为重复调用。
+    this.detachPlayerResources();
+    this.resumeSession.resetSeek();
+    this.resumeSession.result = null;
+    this.currentVideoData = undefined;
+    this.currentOriginalVideoSrc = '';
+    this.forceMpvForNextInit = false;
     this.mpvSurfaceBound = false;
     this.boundMpvSurfaceId = '';
-    if (this.subtitleClearTimer) {
-      clearTimeout(this.subtitleClearTimer);
-      this.subtitleClearTimer = undefined;
-    }
-    this.subtitleAdapter.release();
+    this.pendingMpvSurfaceId = '';
     this.currentSubtitleText = '';
-    if (this.player) {
-      await this.player.release().catch(() => {});
-      this.player = undefined;
-    }
-    VidAllPlayerAdapter.releaseSmbProxy();
-    // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
-    VpeEnhancerUtil.destroyEnhancer();
+    this.isLoading = false;
+    this.hasPrepared = false;
+    await this.drainRetiredPlayers(false);
+    if (sessionId !== this.playbackSessionId) { return; }
     this.transitionTo(PlaybackState.IDLE);
   }
 
@@ -2129,6 +2252,8 @@ export class VideoPlayerController {
     }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[seek] 入口: target=${time}ms isSeeking=${this.isSeeking} backend=${this.backend} duration=${this.duration}`);
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
     this.metricsSeekStartMs = Date.now();
     this.clearResumeSeekAutoplayFallbackState();
     let safeTime = time < 0 ? 0 : time;
@@ -2156,12 +2281,13 @@ export class VideoPlayerController {
       this.transitionTo(PlaybackState.SEEKING);
     }
     await this.pause();
+    if (!this.isCurrentPlayer(sessionId, player)) { return; }
     this.currentTime = safeTime;
     this.subtitleAdapter.onSeekSync();
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     if (canDispatchSeek) {
       try {
-        this.player.seek(safeTime);
+        player.seek(safeTime);
         if (autoplayDecisionSource.length > 0) {
           this.armResumeSeekAutoplayFallback(this.playbackSessionId);
         }
@@ -2202,7 +2328,9 @@ export class VideoPlayerController {
     this.subtitlePauseTime = Date.now()
     console.log(`[VideoPlayerController] Starting subtitle timer: ${this.subtitleRemainingTime}ms`)
 
+    const sessionId = this.playbackSessionId;
     this.subtitleClearTimer = setTimeout(() => {
+      if (sessionId !== this.playbackSessionId) { return; }
       console.log(`[VideoPlayerController] Clearing subtitle`)
       // 同步清空 adapter 内部状态，防止后续 applySubtitleBridgeState 还原过期字幕
       this.subtitleAdapter.onSubtitleUpdate({ text: '' });
@@ -2248,7 +2376,9 @@ export class VideoPlayerController {
   private startProgressTimer(): void {
     this.stopProgressTimer();
     if (this.progressContext === null) { return; }
+    const sessionId = this.playbackSessionId;
     this.progressTimer = setInterval(() => {
+      if (sessionId !== this.playbackSessionId) { return; }
       this.saveProgressNow();
     }, 10000);
   }
@@ -2353,6 +2483,9 @@ export class VideoPlayerController {
    * - 失败回退到 NoSubtitleBridgeAdapter
    */
   private async loadSubtitleTracks(): Promise<void> {
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const bridge = this.subtitleAdapter;
     if (!this.player) {
       return;
     }
@@ -2381,7 +2514,8 @@ export class VideoPlayerController {
       cacheCtx
     );
     // 同步 service session state 到 controller 的 @Trace 字段
-    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    if (!this.isCurrentPlayer(sessionId, player)) { return; }
+    this.applySubtitleBridgeState(bridge.getState());
 
     // 容错：若 service 报 fallback-no-bridge，自身适配器已被 service 重置为 NoSubtitleBridgeAdapter
     // 保留原 catch 行为（service 已内部处理，但 controller 兜底）
@@ -2398,6 +2532,9 @@ export class VideoPlayerController {
   private async loadAudioTracks(): Promise<void> {
     if (!this.player) { return; }
 
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const selectionVersion = this.audioSelectionVersion;
     try {
       // ── 已在 initPlayer 提前填充（presetAudioTracks 路径）──
       if (this.audioTracks.length > 0) {
@@ -2416,7 +2553,8 @@ export class VideoPlayerController {
       }
 
       // ── player.getTrackInfos()（AVPlayer / MPV 运行时轨道）──
-      const allTracks = await this.player.getTrackInfos();
+      const allTracks = await player.getTrackInfos();
+      if (!this.isCurrentPlayer(sessionId, player) || selectionVersion !== this.audioSelectionVersion) { return; }
       const audioTracksInfo = allTracks.filter((t: TrackInfo) => t.trackType === 'audio');
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[loadAudioTracks] getTrackInfos() 返回音轨数: ${audioTracksInfo.length}`);
@@ -2454,6 +2592,11 @@ export class VideoPlayerController {
    * - 无用户绑定 → codec-aware 默认选轨
    */
   private async selectInitialAudioTrackByService(): Promise<void> {
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const selectionVersion = this.audioSelectionVersion;
+    const isCurrent = (): boolean => this.isCurrentPlayer(sessionId, player) &&
+      selectionVersion === this.audioSelectionVersion;
     const videoPath = this.currentOriginalVideoSrc.length > 0
       ? this.currentOriginalVideoSrc
       : (this.currentVideoData?.videoSrc ?? '');
@@ -2461,7 +2604,8 @@ export class VideoPlayerController {
       await this.switchAudioTrack(serviceFindInitialAudioTrackIndex(this.audioTracks));
       return;
     }
-    const result = await this.audioRoutingService.resolveInitialTrackIndex(videoPath, this.audioTracks);
+    const result = await this.audioRoutingService.resolveInitialTrackIndex(videoPath, this.audioTracks, isCurrent);
+    if (!isCurrent()) { return; }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[loadAudioTracks] AudioTrackRoutingService 选轨: source=${result.source} trackIndex=${result.trackIndex} shouldClearUserBinding=${result.shouldClearUserBinding}`);
     await this.switchAudioTrack(result.trackIndex);
@@ -2513,6 +2657,9 @@ export class VideoPlayerController {
   }
 
   async selectSubtitleTrack(trackIndex: number): Promise<void> {
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const bridge = this.subtitleAdapter;
     if (!this.player) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `[selectSubtitleTrack] player 未初始化，无法切换到轨道 ${trackIndex}`);
@@ -2529,12 +2676,14 @@ export class VideoPlayerController {
       `[selectSubtitleTrack] 调用 player.selectTrack(${trackIndex})，backend=${this.backend}`);
     try {
       await this.player.selectTrack(trackIndex);
+      if (!this.isCurrentPlayer(sessionId, player)) { return; }
       this.currentSubtitleTrack = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         trackIndex < 0
           ? `[selectSubtitleTrack] ✓ 字幕已关闭 (trackIndex=${trackIndex})`
           : `[selectSubtitleTrack] ✓ 内嵌字幕轨道 ${trackIndex} 已激活 (currentSubtitleTrack=${this.currentSubtitleTrack})`);
     } catch (e) {
+      if (!this.isCurrentPlayer(sessionId, player)) { return; }
       const err = e as BusinessError;
       this.lastErrorMessage = this.normalizePlayerError(err.message ?? '字幕切换失败');
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -2583,6 +2732,13 @@ export class VideoPlayerController {
    * - SMB 源使用初始化前的原始 URL 作为稳定绑定 key
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const bridge = this.subtitleAdapter;
+    const selection = ++this.subtitleSelectionVersion;
+    const videoPath = this.stableVideoSrcForCache;
+    const isCurrent = (): boolean => this.isCurrentPlayer(sessionId, player) &&
+      selection === this.subtitleSelectionVersion;
     if (this.subtitleClearTimer !== undefined) {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;
@@ -2596,18 +2752,17 @@ export class VideoPlayerController {
       this.currentOriginalVideoSrc,
       allIndex
     );
-    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    if (!isCurrent()) { return; }
+    this.applySubtitleBridgeState(bridge.getState());
 
     // 应用 binding directive 持久化
-    const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
-    const videoPath = this.currentOriginalVideoSrc.length > 0 ? this.currentOriginalVideoSrc : rawVideoSrc;
     if (videoPath.length > 0) {
       if (directive.type === 'disabled') {
-        this.subtitleDispatcher.clearUserBinding(videoPath).catch(() => {});
+        this.subtitleDispatcher.clearUserBinding(videoPath, isCurrent).catch(() => {});
       } else if (directive.type === 'external-local-file' && directive.url !== undefined) {
-        this.subtitleDispatcher.saveUserBinding(videoPath, directive.url, 'local-file').catch(() => {});
+        this.subtitleDispatcher.saveUserBinding(videoPath, directive.url, 'local-file', isCurrent).catch(() => {});
       } else if (directive.type === 'internal' && directive.bindingKey !== undefined) {
-        this.subtitleDispatcher.saveUserBinding(videoPath, directive.bindingKey, 'internal').catch(() => {});
+        this.subtitleDispatcher.saveUserBinding(videoPath, directive.bindingKey, 'internal', isCurrent).catch(() => {});
       }
     }
   }
@@ -2636,6 +2791,13 @@ export class VideoPlayerController {
     // 避免 MPV 后端自动播放后被 pause→seek→play 导致二次播放/跳帧。
     // 仅对自动初始选轨抑制 flush；用户主动切轨（userInitiated）即使处于初始化窗口
     // 也保留 pause→seek→play 以保证切轨后音视频对齐。
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const selectionVersion = ++this.audioSelectionVersion;
+    const isCurrent = (): boolean => this.isCurrentPlayer(sessionId, player) &&
+      selectionVersion === this.audioSelectionVersion;
+    const audioTrack = this.audioTracks[trackIndex];
+    const bindingPath = this.stableVideoSrcForCache;
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
     // prepared 续播可能已在同一事件周期内发起。此时切轨仍可生效，但不能再 pause/seek，
@@ -2646,20 +2808,21 @@ export class VideoPlayerController {
     try {
       // 1. 暂停视频（避免音轨切换期间画面继续走而音轨还在旧轨）
       if (shouldFlushAfterSwitch) {
-        await this.player.pause();
+        await player.pause();
+        if (!isCurrent()) { return; }
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[switchAudioTrack] 暂停播放，当前时间=${seekBack}ms`);
       }
 
       // 2. 切换音轨
-      const audioTrack = this.audioTracks[trackIndex];
       if (audioTrack.trackIndex < -1) {
         const errorMessage = `音轨参数非法: uiIndex=${trackIndex}, trackIndex=${audioTrack.trackIndex}`;
         this.lastErrorMessage = errorMessage;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG, errorMessage);
         return;
       }
-      await this.player.selectTrack(audioTrack.trackIndex);
+      await player.selectTrack(audioTrack.trackIndex);
+      if (!isCurrent()) { return; }
       this.activeAudioIndex = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[switchAudioTrack] ✓ 音轨已切换: uiIndex=${trackIndex} ` +
@@ -2669,10 +2832,10 @@ export class VideoPlayerController {
 
       // 用户主动切换时持久化绑定
       if (userInitiated) {
-        const videoPath = this.currentVideoData?.videoSrc ?? '';
+        const videoPath = bindingPath;
         if (videoPath.length > 0) {
           const dispatcher = new AudioDispatcher();
-          dispatcher.saveAudioBinding(videoPath, audioTrack.displayName).catch(() => {});
+          dispatcher.saveAudioBinding(videoPath, audioTrack.displayName, isCurrent).catch(() => {});
         }
       }
 
@@ -2689,20 +2852,21 @@ export class VideoPlayerController {
         // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
         this.isSeeking = true;
         this.transitionTo(PlaybackState.SEEKING);
-        this.player.seek(seekTarget);
+        player.seek(seekTarget);
         // seekDone 回调里会调 play()，不需要在这里手动恢复
       } else if (shouldFlushAfterSwitch) {
         // 时间为 0（片头），直接恢复播放
-        await this.player.play();
+        await player.play();
       }
     } catch (e) {
+      if (!isCurrent()) { return; }
       const err = e as BusinessError;
       this.lastErrorMessage = this.normalizePlayerError(err.message ?? '音轨切换失败');
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `切换音轨失败: code=${err.code} msg=${err.message}`);
       // 切换失败时尝试恢复播放
       if (wasPlaying) {
-        await this.player.play().catch(() => {});
+        await player.play().catch(() => {});
       }
     }
   }
@@ -2725,8 +2889,12 @@ export class VideoPlayerController {
 
   /** 将已下载到本地的字幕文件追加到轨道列表并刷新 UI。 */
   async addExternalSubtitle(localPath: string): Promise<void> {
+    const sessionId = this.playbackSessionId;
+    const player = this.player;
+    const bridge = this.subtitleAdapter;
     await this.subtitleSessionSvc.addLocalSubtitle(this.subtitleAdapter, localPath);
-    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    if (!this.isCurrentPlayer(sessionId, player)) { return; }
+    this.applySubtitleBridgeState(bridge.getState());
   }
 
 }

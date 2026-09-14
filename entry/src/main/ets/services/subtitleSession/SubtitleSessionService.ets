@@ -80,6 +80,7 @@ function buildEmptySessionState(): SubtitleSessionState {
 
 /** 字幕会话 service。 */
 export class SubtitleSessionService {
+  private generation: number = 0;
   private state: SubtitleSessionState = buildEmptySessionState();
   private readonly subtitleDispatcher: SubtitleDispatcher = new SubtitleDispatcher();
 
@@ -100,6 +101,7 @@ export class SubtitleSessionService {
 
   /** 重置 session（用于 initPlayer 切换源时清理上一次残留）。 */
   reset(): void {
+    this.generation++;
     this.state = buildEmptySessionState();
   }
 
@@ -120,6 +122,7 @@ export class SubtitleSessionService {
     smbOriginalSrc: string,
     cacheContext: SubtitleCacheContext | undefined
   ): Promise<SubtitlePriorityResolution> {
+    const generation = ++this.generation;
     if (!player) {
       return { resolution: { type: 'none' }, appliedVia: 'fallback-no-bridge' };
     }
@@ -129,8 +132,10 @@ export class SubtitleSessionService {
 
     try {
       await subtitleAdapter.init(player, videoData);
+      if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
       this.applyBridgeState(subtitleAdapter.getState());
     } catch (e) {
+      if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
       const err = e as BusinessError;
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `字幕适配器初始化失败，回退无字幕模式: code=${err.code} msg=${err.message}`);
@@ -152,9 +157,12 @@ export class SubtitleSessionService {
       resolution = await this.subtitleDispatcher.resolveSubtitle(
         videoPath,
         this.state.allSubtitleTracks,
-        cacheContext
+        cacheContext,
+        (): boolean => generation === this.generation
       );
+      if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
     } catch (e) {
+      if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `resolveSubtitle 失败，保留 adapter 自动选轨: ${String(e)}`);
       return { resolution: { type: 'none' }, appliedVia: 'no-op' };
@@ -165,6 +173,7 @@ export class SubtitleSessionService {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[loadSubtitleTracks] 调度器覆盖选轨: trackIndex=${targetIndex}`);
       await subtitleAdapter.switchTrack(targetIndex);
+      if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
       this.applyBridgeState(subtitleAdapter.getState());
       return { resolution, appliedVia: 'switch-track' };
     }
@@ -176,15 +185,18 @@ export class SubtitleSessionService {
       try {
         const trackCountBeforeAppend = this.state.allSubtitleTracks.length;
         await subtitleAdapter.addLocalSubtitle(localPath);
+        if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
         this.applyBridgeState(subtitleAdapter.getState());
         if (this.state.allSubtitleTracks.length <= trackCountBeforeAppend) {
           throw new Error('缓存字幕未能追加到轨道列表');
         }
         const newIndex = this.state.allSubtitleTracks.length - 1;
         await subtitleAdapter.switchTrack(newIndex);
+        if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
         this.applyBridgeState(subtitleAdapter.getState());
         return { resolution, appliedVia: 'append-and-switch', newTrackIndex: newIndex };
       } catch (e) {
+        if (generation !== this.generation) { return { resolution: { type: 'none' }, appliedVia: 'no-op' }; }
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `追加缓存字幕失败: ${String(e)}`);
         return { resolution, appliedVia: 'no-op' };
@@ -205,7 +217,14 @@ export class SubtitleSessionService {
     smbOriginalSrc: string,
     allIndex: number
   ): Promise<SubtitleBindingDirective> {
-    await subtitleAdapter.switchTrack(allIndex);
+    const generation = ++this.generation;
+    try {
+      await subtitleAdapter.switchTrack(allIndex);
+    } catch (e) {
+      if (generation !== this.generation) { return { type: 'skip' }; }
+      throw e as Error;
+    }
+    if (generation !== this.generation) { return { type: 'skip' }; }
     this.applyBridgeState(subtitleAdapter.getState());
 
     if (!videoData) {
@@ -240,7 +259,14 @@ export class SubtitleSessionService {
     subtitleAdapter: ISubtitleBridgeAdapter,
     localPath: string
   ): Promise<number> {
-    await subtitleAdapter.addLocalSubtitle(localPath);
+    const generation = ++this.generation;
+    try {
+      await subtitleAdapter.addLocalSubtitle(localPath);
+    } catch (e) {
+      if (generation !== this.generation) { return -1; }
+      throw e as Error;
+    }
+    if (generation !== this.generation) { return -1; }
     this.applyBridgeState(subtitleAdapter.getState());
     const newIndex = this.state.allSubtitleTracks.length - 1;
     return newIndex;

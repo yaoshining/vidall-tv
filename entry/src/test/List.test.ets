@@ -1,3 +1,4 @@
+import playerLifecycleTest from './PlayerLifecycle.test';
 import { installStructuredReport } from './ci/StructuredReport';
 import directedAdapterErrorsTest from './DirectedAdapterErrors.test';
 import searchSessionTest from './SearchSession.test';
@@ -76,6 +77,7 @@ import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackCon
 installStructuredReport();
 
 export default function testsuite() {
+  playerLifecycleTest();
   searchSessionTest();
   timeUtilTest();
   playbackContextTest();

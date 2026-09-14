@@ -49,7 +49,8 @@ export class AudioDispatcher {
     }
   }
 
-  async saveAudioBinding(videoPath: string, displayName: string): Promise<void> {
+  async saveAudioBinding(videoPath: string, displayName: string,
+    isCurrent: () => boolean = (): boolean => true): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
       const binding: AudioBinding = {
@@ -57,16 +58,19 @@ export class AudioDispatcher {
         displayName,
         savedAt: Date.now()
       };
-      await AppPreferences.set(key, JSON.stringify(binding));
+      if (!isCurrent()) { return; }
+      await AppPreferences.setGuarded(key, JSON.stringify(binding), isCurrent);
     } catch (e) {
       console.error(`[AudioDispatcher] saveAudioBinding 失败: ${String(e)}`);
     }
   }
 
-  async clearAudioBinding(videoPath: string): Promise<void> {
+  async clearAudioBinding(videoPath: string,
+    isCurrent: () => boolean = (): boolean => true): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
-      await AppPreferences.set(key, '');
+      if (!isCurrent()) { return; }
+      await AppPreferences.setGuarded(key, '', isCurrent);
     } catch (e) {
       console.error(`[AudioDispatcher] clearAudioBinding 失败: ${String(e)}`);
     }

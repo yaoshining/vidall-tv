@@ -189,6 +189,7 @@ export class PlaybackBackendService {
     // 并保留 Basic Authorization 给 VidAll_Player 的内部 native bridge 解码后注入 Samba。
     this.normalizeSmbPlaybackSource(videoData);
     let smbOriginalUrl = '';
+    let smbProxyGeneration: number | undefined = undefined;
     let effectiveVideoSrc = videoData.videoSrc;
     if (videoData.videoSrc.startsWith('smb://')) {
       smbOriginalUrl = videoData.videoSrc;
@@ -200,6 +201,7 @@ export class PlaybackBackendService {
         const proxyUrl = VidAllPlayerAdapter.startSmbProxy(proxySmbUrl);
         if (proxyUrl.length > 0) {
           effectiveVideoSrc = proxyUrl;
+          smbProxyGeneration = VidAllPlayerAdapter.smbProxyGeneration;
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `SMB 源已通过代理 URL 转交 ${backend}（proxy started → rewritten to ${proxyUrl}）`);
         } else {
@@ -251,6 +253,7 @@ export class PlaybackBackendService {
       subtitleBridge,
       subtitleBridgeKind,
       effectiveVideoSrc,
+      smbProxyGeneration,
     };
     return handle;
   }
@@ -269,7 +272,8 @@ export class PlaybackBackendService {
     surfaceId: string,
     videoData: VideoData,
     width: number,
-    height: number
+    height: number,
+    isCurrent: () => boolean = (): boolean => true
   ): Promise<void> {
     if (!(adapter instanceof MpvPlayerAdapter)) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
@@ -281,7 +285,9 @@ export class PlaybackBackendService {
     try {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `bindMpvContext: 调用 surfaceAdapter.onLoad(${surfaceId.substring(0, 8)}..., ${width}, ${height})`);
+      if (!isCurrent()) { return; }
       await adapter.getSurfaceAdapter().onLoad(surfaceId, width, height);
+      if (!isCurrent()) { return; }
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `bindMpvContext: surfaceAdapter.onLoad 完成，开始 adapter.init()`);
       await adapter.init(videoData, surfaceId);

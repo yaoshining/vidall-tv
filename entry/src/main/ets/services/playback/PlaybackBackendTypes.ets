@@ -116,6 +116,8 @@ export interface PlaybackAdapterHandle {
   subtitleBridgeKind: SubtitleBridgeKind;
   /** 启动 SMB 代理后写回 videoData.videoSrc（用于 controller 持有原始 URL 记录）。 */
   effectiveVideoSrc: string;
+  /** 仅持有启动本代理的会话可在异步收尾时释放。 */
+  smbProxyGeneration?: number;
   /** 错误回调：仅在 adapter 创建阶段失败时填充。 */
   errorMessage?: string;
 }

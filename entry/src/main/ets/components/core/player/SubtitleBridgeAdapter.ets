@@ -414,6 +414,9 @@ export interface ISubtitleBridgeAdapter {
 }
 
 export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
+  protected lifecycleGeneration: number = 0;
+  protected selectionGeneration: number = 0;
+
   protected player?: IPlayer;
   protected videoData?: VideoData;
   protected subtitleTracks: TrackInfo[] = [];
@@ -431,6 +434,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   private _lastDriftLogMs: number = 0;
 
   async init(player: IPlayer, videoData?: VideoData): Promise<void> {
+    const generation = ++this.lifecycleGeneration;
+    const selection = ++this.selectionGeneration;
     this.player = player;
     this.videoData = videoData;
     this.subtitleTracks = [];
@@ -443,12 +448,14 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     this.lastSrtText = '';
 
     const internalItems = await this.loadInternalTracks();
+    if (generation !== this.lifecycleGeneration) { return; }
     const mergedItems: SubtitleTrackItem[] = [];
     for (let i = 0; i < internalItems.length; i++) {
       mergedItems.push(internalItems[i]);
     }
 
     const externalItems = await this.loadExternalTracks();
+    if (generation !== this.lifecycleGeneration) { return; }
     for (let i = 0; i < externalItems.length; i++) {
       mergedItems.push(externalItems[i]);
     }
@@ -457,7 +464,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
     if (this.allSubtitleTracks.length > 0) {
       const preferredIndex = await this.findPreferredTrackIndex();
-      if (preferredIndex >= 0) {
+      if (generation !== this.lifecycleGeneration) { return; }
+      if (preferredIndex >= 0 && selection === this.selectionGeneration) {
         // 不 await：auto-select 的轨道切换可能包含长时间异步操作（如 SMB 内嵌字幕 30s 提取）
         // fire-and-forget，初始化立即完成，字幕在提取完成后自动开始渲染
         this.switchTrack(preferredIndex).catch(() => {
@@ -479,7 +487,9 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   protected async findPreferredTrackIndex(): Promise<number> {
+    const generation = this.lifecycleGeneration;
     const preference = await loadSubtitleLanguagePreference()
+    if (generation !== this.lifecycleGeneration) { return -1; }
     const trackCandidates: SubtitleTrackLanguageCandidate[] = []
     for (let index = 0; index < this.allSubtitleTracks.length; index++) {
       const item = this.allSubtitleTracks[index]
@@ -560,6 +570,7 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   onEmbeddedTimedText(_text: string): void { /* 子类按需覆盖 */ }
 
   async switchTrack(allIndex: number): Promise<void> {
+    this.selectionGeneration++;
     if (!this.player) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `[字幕] switchTrack(${allIndex}): player 未初始化`);
@@ -674,6 +685,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   release(): void {
+    this.lifecycleGeneration++;
+    this.selectionGeneration++;
     this.subtitleTracks = [];
     this.allSubtitleTracks = [];
     this.activeSubtitleIndex = -1;
@@ -693,6 +706,7 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   protected async loadExternalTracks(): Promise<SubtitleTrackItem[]> {
+    const generation = this.lifecycleGeneration;
     if (!this.videoData || this.videoData.type !== VideoDataType.URL) {
       return [];
     }
@@ -772,6 +786,7 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       }
 
       const batchResults = await Promise.all(batchPromises);
+      if (generation !== this.lifecycleGeneration) { return []; }
       for (let i = start; i < end; i++) {
         const candidate = limitedCandidates[i];
         const url = dirUrl + encodeURIComponent(candidate);
@@ -794,8 +809,10 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           let entries: SrtEntry[] = [];
           if (isAss) {
             entries = await this.fetchAss(url, headers);
+            if (generation !== this.lifecycleGeneration) { return []; }
           } else {
             entries = await this.fetchSrt(url, headers);
+            if (generation !== this.lifecycleGeneration) { return []; }
           }
           const langLabel = this.extractLangLabel(candidate, baseName);
           // 缺陷 3 修复：提取原始语言代码（如 'zh'/'en'），用于埋点语言统计
@@ -941,7 +958,9 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       return items;
     }
 
+    const generation = this.lifecycleGeneration;
     const allTracks = await this.player.getTrackInfos();
+    if (generation !== this.lifecycleGeneration) { return []; }
     const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
     this.subtitleTracks = subtitleTracks;
 
@@ -1039,7 +1058,9 @@ export class MpvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       return items;
     }
 
+    const generation = this.lifecycleGeneration;
     const allTracks = await this.player.getTrackInfos();
+    if (generation !== this.lifecycleGeneration) { return []; }
     // 过滤字幕轨道，排除图形字幕（PGS/VobSub 等）
     const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => {
       if (t.trackType !== 'subtitle') {
