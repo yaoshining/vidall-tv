@@ -1,0 +1,415 @@
+
+OHOS_REPORT_SUM: 21
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=1
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=huks_roundtrip_randomness_unicode_empty_reuse
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=1
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=huks_roundtrip_randomness_unicode_empty_reuse
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=208
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=2
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=huks_tamper_scope_wrong_key_missing_key_no_recreate
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=2
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=huks_tamper_scope_wrong_key_missing_key_no_recreate
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=209
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=3
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_real_crud_and_delete_retains_shared_key
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=3
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_real_crud_and_delete_retains_shared_key
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=100
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=4
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_legacy_migration_retry_and_idempotence
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=4
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_legacy_migration_retry_and_idempotence
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=58
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=5
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_migration_database_failure_preserves_and_retry
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=5
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_migration_database_failure_preserves_and_retry
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=59
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=6
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_blank_edit_preserves_even_after_key_recovers
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=6
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_blank_edit_preserves_even_after_key_recovers
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=49
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=7
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_failed_read_save_preserves_and_reentry_recovers
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=7
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_failed_read_save_preserves_and_reentry_recovers
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=50
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=8
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_migration_does_not_overwrite_concurrent_save
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=8
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_migration_does_not_overwrite_concurrent_save
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=50
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=9
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_concurrent_saves_conflict_and_encrypt_failure_preserves
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=9
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_concurrent_saves_conflict_and_encrypt_failure_preserves
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=56
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=10
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_missing_key_restore_keeps_ciphertext_and_import_rejected
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=10
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=file_sources_missing_key_restore_keeps_ciphertext_and_import_rejected
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=48
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=11
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_real_crud_and_delete_retains_shared_key
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=11
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_real_crud_and_delete_retains_shared_key
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=74
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=12
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_legacy_migration_retry_and_idempotence
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=12
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_legacy_migration_retry_and_idempotence
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=51
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=13
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_migration_database_failure_preserves_and_retry
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=13
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_migration_database_failure_preserves_and_retry
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=54
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=14
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_blank_edit_preserves_even_after_key_recovers
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=14
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_blank_edit_preserves_even_after_key_recovers
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=56
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=15
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_failed_read_save_preserves_and_reentry_recovers
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=15
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_failed_read_save_preserves_and_reentry_recovers
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=55
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=16
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_migration_does_not_overwrite_concurrent_save
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=16
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_migration_does_not_overwrite_concurrent_save
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=53
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=17
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_concurrent_saves_conflict_and_encrypt_failure_preserves
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=17
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_concurrent_saves_conflict_and_encrypt_failure_preserves
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=48
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=18
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_missing_key_restore_keeps_ciphertext_and_import_rejected
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=18
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_missing_key_restore_keeps_ciphertext_and_import_rejected
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=46
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=19
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_partial_field_failure_preserves_entire_migration
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=19
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_partial_field_failure_preserves_entire_migration
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=66
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=20
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_all_sensitive_fields_migrate_and_read_back
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=20
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=video_servers_all_sensitive_fields_migrate_and_read_back
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=60
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=21
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=no_credentials_is_distinct_from_read_failure
+OHOS_REPORT_STATUS_CODE: 1
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: current=21
+OHOS_REPORT_STATUS: id=JS
+OHOS_REPORT_STATUS: numtests=21
+OHOS_REPORT_STATUS: stream=
+OHOS_REPORT_STATUS: test=no_credentials_is_distinct_from_read_failure
+OHOS_REPORT_STATUS_CODE: 0
+OHOS_REPORT_STATUS: consuming=22
+
+
+OHOS_REPORT_STATUS: class=CredentialStorage_platform
+OHOS_REPORT_STATUS: suiteconsuming=1472
+
+
+OHOS_REPORT_RESULT: stream=Tests run: 21, Failure: 0, Error: 0, Pass: 21, Ignore: 0
+OHOS_REPORT_CODE: 0
+OHOS_REPORT_STATUS: taskconsuming=1472
+
+TestFinished-ResultCode: 0
+TestFinished-ResultMsg: your test finished!!!
+user test finished.

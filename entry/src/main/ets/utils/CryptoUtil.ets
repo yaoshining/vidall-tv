@@ -1,127 +1,102 @@
+import { huks } from '@kit.UniversalKeystoreKit';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import buffer from '@ohos.buffer';
+import { LegacyCredentialReader } from './LegacyCredentialReader';
 
-/**
- * 加密工具类
- * 使用 AES-256-CBC 模式加密敏感数据
- */
-export class CryptoUtil {
-  // 使用应用 bundleName 作为密钥派生的基础
-  private static readonly APP_SECRET = "com.yao.vidalltv";
-  private static readonly SALT = "vidall_tv_salt_2024";
-  private static readonly KEY_SIZE = 32; // 256 bits
-  private static readonly IV_SIZE = 16; // CBC 需要 16 字节 IV
+/** 密钥材料只在 HUKS 内生成和使用；别名不是密钥。删除数据源不删除共享密钥。 */
+export class CredentialCipher {
+  private alias: string;
+  private creating: Promise<void> | null = null;
 
-  /**
-   * 派生 AES 密钥
-   * 使用 SHA-256 从应用密钥派生 32 字节密钥
-   */
-  private static async deriveKey(): Promise<Uint8Array> {
-    try {
-      // 组合密钥材料
-      const keyMaterial = CryptoUtil.APP_SECRET + CryptoUtil.SALT;
-      const keyData = buffer.from(keyMaterial, 'utf-8');
+  constructor(alias: string) { this.alias = alias; }
 
-      // 使用 SHA-256 生成 32 字节密钥
-      const md = cryptoFramework.createMd('SHA256');
-      await md.update({ data: new Uint8Array(keyData.buffer) });
-      const digest = await md.digest();
+  private properties(purpose: number): huks.HuksParam[] {
+    return [
+      { tag: huks.HuksTag.HUKS_TAG_AUTH_STORAGE_LEVEL, value: huks.HuksAuthStorageLevel.HUKS_AUTH_STORAGE_LEVEL_DE },
+      { tag: huks.HuksTag.HUKS_TAG_ALGORITHM, value: huks.HuksKeyAlg.HUKS_ALG_AES },
+      { tag: huks.HuksTag.HUKS_TAG_KEY_SIZE, value: huks.HuksKeySize.HUKS_AES_KEY_SIZE_256 },
+      { tag: huks.HuksTag.HUKS_TAG_PURPOSE, value: purpose },
+      { tag: huks.HuksTag.HUKS_TAG_PADDING, value: huks.HuksKeyPadding.HUKS_PADDING_NONE },
+      { tag: huks.HuksTag.HUKS_TAG_BLOCK_MODE, value: huks.HuksCipherMode.HUKS_MODE_GCM }
+    ];
+  }
 
-      return new Uint8Array(digest.data);
-    } catch (error) {
-      console.error('CryptoUtil: Failed to derive key', JSON.stringify(error));
-      throw new Error('密钥派生失败');
+  private storageOptions(): huks.HuksOptions {
+    return { properties: [
+      { tag: huks.HuksTag.HUKS_TAG_AUTH_STORAGE_LEVEL, value: huks.HuksAuthStorageLevel.HUKS_AUTH_STORAGE_LEVEL_DE }
+    ] };
+  }
+
+  private async createIfMissing(): Promise<void> {
+    if (!await huks.hasKeyItem(this.alias, this.storageOptions())) {
+      await huks.generateKeyItem(this.alias, { properties: this.properties(
+        huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT | huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT) });
     }
   }
 
-  /**
-   * 加密字符串
-   * @param plaintext 明文字符串
-   * @returns 加密后的字符串，格式：iv:ciphertext (Base64编码)
-   */
-  static async encrypt(plaintext: string): Promise<string> {
+  private async ensureKey(): Promise<void> {
+    if (this.creating === null) { this.creating = this.createIfMissing(); }
+    try { await this.creating; } finally { this.creating = null; }
+  }
+
+  private async crypt(data: Uint8Array, nonce: Uint8Array, scope: string,
+    encrypt: boolean, tag?: Uint8Array): Promise<Uint8Array> {
+    const properties = this.properties(encrypt ? huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT :
+      huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT);
+    properties.push({ tag: huks.HuksTag.HUKS_TAG_NONCE, value: nonce });
+    properties.push({ tag: huks.HuksTag.HUKS_TAG_ASSOCIATED_DATA,
+      value: new Uint8Array(buffer.from('vidall:v2:' + scope, 'utf-8').buffer) });
+    if (tag !== undefined) { properties.push({ tag: huks.HuksTag.HUKS_TAG_AE_TAG, value: tag }); }
+    const session = await huks.initSession(this.alias, { properties });
     try {
-      // 派生密钥
-      const keyData = await CryptoUtil.deriveKey();
-
-      // 生成随机 IV
-      const iv = cryptoFramework.createRandom().generateRandomSync(CryptoUtil.IV_SIZE).data;
-
-      // 创建对称密钥
-      const keyBlob: cryptoFramework.DataBlob = {
-        data: keyData
-      };
-      const symKeyGenerator = cryptoFramework.createSymKeyGenerator('AES256');
-      const symKey = await symKeyGenerator.convertKey(keyBlob);
-
-      // 创建加密器（使用 CBC 模式 + PKCS7 填充）
-      const cipher = cryptoFramework.createCipher('AES256|CBC|PKCS7');
-      const ivParams: cryptoFramework.IvParamsSpec = {
-        algName: 'IvParamsSpec',
-        iv: { data: iv }
-      };
-
-      await cipher.init(cryptoFramework.CryptoMode.ENCRYPT_MODE, symKey, ivParams);
-
-      // 加密数据
-      const plaintextData = buffer.from(plaintext, 'utf-8').buffer;
-      const encryptData = await cipher.doFinal({ data: new Uint8Array(plaintextData) });
-
-      // 转换为 Base64 并组合
-      const ivBase64 = buffer.from(iv.buffer).toString('base64');
-      const ciphertextBase64 = buffer.from(encryptData.data.buffer).toString('base64');
-
-      return `${ivBase64}:${ciphertextBase64}`;
-    } catch (error) {
-      console.error('CryptoUtil: Encryption failed', JSON.stringify(error));
-      throw new Error('加密失败: ' + JSON.stringify(error));
+      const result = await huks.finishSession(session.handle, { properties, inData: data });
+      if (result.outData === undefined) { throw new Error('凭据加解密失败'); }
+      return result.outData;
+    } catch (e) {
+      try { await huks.abortSession(session.handle, { properties: [] }); } catch (e) { }
+      throw new Error('凭据加解密失败');
     }
   }
 
-  /**
-   * 解密字符串
-   * @param encrypted 加密字符串，格式：iv:ciphertext (Base64编码)
-   * @returns 解密后的明文字符串
-   */
-  static async decrypt(encrypted: string): Promise<string> {
+  async encrypt(value: string, scope: string): Promise<string> {
     try {
-      // 解析加密字符串
-      const parts = encrypted.split(':');
-      if (parts.length !== 2) {
-        throw new Error('加密数据格式错误');
-      }
+      await this.ensureKey();
+      const nonce = cryptoFramework.createRandom().generateRandomSync(12).data;
+      const out = await this.crypt(new Uint8Array(buffer.from('1' + value, 'utf-8').buffer), nonce, scope, true);
+      return 'v2:' + buffer.from(nonce).toString('base64') + ':' + buffer.from(out).toString('base64');
+    } catch (e) { throw new Error('凭据保护失败，请重试；原数据未修改'); }
+  }
 
-      const iv = new Uint8Array(buffer.from(parts[0], 'base64').buffer);
-      const ciphertext = new Uint8Array(buffer.from(parts[1], 'base64').buffer);
+  async decrypt(value: string, scope: string): Promise<string> {
+    try {
+      if (!value.startsWith('v2:')) { return await LegacyCredentialReader.decrypt(value); }
+      const parts = value.split(':');
+      if (parts.length !== 3) { throw new Error('格式错误'); }
+      const nonce = this.decode(parts[1]);
+      const encrypted = this.decode(parts[2]);
+      if (nonce.length !== 12 || encrypted.length < 16) { throw new Error('格式错误'); }
+      // 读取绝不创建或替换密钥；恢复到其他设备时显式失败，原密文仍保留。
+      if (!await huks.hasKeyItem(this.alias, this.storageOptions())) { throw new Error('密钥缺失'); }
+      const out = await this.crypt(encrypted.slice(0, -16), nonce, scope, false, encrypted.slice(-16));
+      const decoded = buffer.from(out).toString('utf-8');
+      if (!decoded.startsWith('1')) { throw new Error('凭据内容格式错误'); }
+      return decoded.slice(1);
+    } catch (e) { throw new Error('凭据无法读取，请重试或在设置中重新输入；原凭据已保留'); }
+  }
 
-      // 派生密钥
-      const keyData = await CryptoUtil.deriveKey();
-
-      // 创建对称密钥
-      const keyBlob: cryptoFramework.DataBlob = {
-        data: keyData
-      };
-      const symKeyGenerator = cryptoFramework.createSymKeyGenerator('AES256');
-      const symKey = await symKeyGenerator.convertKey(keyBlob);
-
-      // 创建解密器（使用 CBC 模式 + PKCS7 填充）
-      const decipher = cryptoFramework.createCipher('AES256|CBC|PKCS7');
-      const ivParams: cryptoFramework.IvParamsSpec = {
-        algName: 'IvParamsSpec',
-        iv: { data: iv }
-      };
-
-      await decipher.init(cryptoFramework.CryptoMode.DECRYPT_MODE, symKey, ivParams);
-
-      // 解密数据
-      const decryptData = await decipher.doFinal({ data: ciphertext });
-
-      // 转换为字符串
-      return buffer.from(decryptData.data.buffer).toString('utf-8');
-    } catch (error) {
-      console.error('CryptoUtil: Decryption failed', JSON.stringify(error));
-      throw new Error('解密失败');
-    }
+  private decode(value: string): Uint8Array {
+    const bytes = new Uint8Array(buffer.from(value, 'base64').buffer);
+    if (buffer.from(bytes).toString('base64') !== value) { throw new Error('格式错误'); }
+    return bytes;
   }
 }
 
+export class CryptoUtil {
+  private static cipher: CredentialCipher = new CredentialCipher('vidall.credentials.aesgcm.v2');
+  static encrypt(value: string, scope: string = ''): Promise<string> {
+    return CryptoUtil.cipher.encrypt(value, scope);
+  }
+  static decrypt(value: string, scope: string = ''): Promise<string> {
+    return CryptoUtil.cipher.decrypt(value, scope);
+  }
+}

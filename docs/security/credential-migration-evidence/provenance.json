@@ -1,0 +1,22 @@
+{
+  "base_sha": "6af67e19ea88c635490d92c155297e1c0ef3085d",
+  "device": "Huawei_TV_6_1_1",
+  "serial": "127.0.0.1:5555",
+  "api": 24,
+  "os": "HarmonyOS 6.1.1(24) Beta1",
+  "test_entry": "entry_test / OpenHarmonyTestRunner / CREDENTIAL_STORAGE_SMOKE=true",
+  "source_digest_algorithm": "sha256 of sorted entry/src/**/*.ets relative path + space + sha256(bytes), joined by newline",
+  "source_digest": "a8e46a7a1dad7bc891a65570803d3e42d79108737b248bf7f5a30f27b13bddd4",
+  "test_hap_sha256": "680836bace1092af4bd7bbdf3d748b72b75d9a7c74ad668810751e0cb42f3c6f",
+  "application_hap_sha256": "c0244d022183f0a867f7c22954a6ac43b587cdcbf6f854fb234e3e3a9d91aba4",
+  "application_build_exit": 0,
+  "test_build_exit": 0,
+  "first_iteration": {
+    "passed": 15,
+    "errors": 1,
+    "reason": "empty plaintext roundtrip, fixed with authenticated internal framing"
+  },
+  "final_result": "21 passed, 0 failed, 0 error, 0 ignored",
+  "production_entry_replaced": false,
+  "production_data_cleared": false
+}

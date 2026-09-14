@@ -1,3 +1,4 @@
+import { parseCredentialConfig } from '../utils/CredentialConfig';
 import { JsonHttpClient } from './JsonHttpClient';
 import { BusinessError } from "@kit.BasicServicesKit";
 import {
@@ -40,7 +41,7 @@ export class PlexClient {
   }
 
   static fromConfigJson(configJson: string): PlexClient {
-    const raw = JSON.parse(configJson) as Record<string, Object>;
+    const raw = parseCredentialConfig(configJson) as Record<string, Object>;
     const protocolStr = typeof raw['protocol'] === 'string' ? raw['protocol'] : 'http';
     const protocol = protocolStr === 'https' ? 'https' : 'http';
     const rawPort = raw['port'];

@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { FileSource, FileSourceDirectory, FileSourceType, DirStatus } from '../models/FileSourceEntity';
-import { CryptoUtil } from '../../utils/CryptoUtil';
+import { CredentialStorage } from './CredentialStorage';
 import { BusinessError } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
@@ -14,9 +14,12 @@ import { FileSourceDbCore } from './FileSourceDbCore';
  */
 export class FileSourceDao {
   private core: FileSourceDbCore;
+  private credentials: CredentialStorage;
+  private static readonly CREDENTIAL_KEYS: string[] = ['password'];
 
-  constructor(core: FileSourceDbCore) {
+  constructor(core: FileSourceDbCore, credentials: CredentialStorage = new CredentialStorage()) {
     this.core = core;
+    this.credentials = credentials;
   }
 
   /**
@@ -26,16 +29,12 @@ export class FileSourceDao {
     const store = this.core.getStore();
 
     try {
-      // 解析配置并加密密码
-      const config = JSON.parse(fileSource.configJson) as Record<string, Object>;
-      if (config.password) {
-        config.password = await CryptoUtil.encrypt(config.password as string);
-      }
+      const config = await this.credentials.write(fileSource.configJson, TABLE_FILE_SOURCES, FileSourceDao.CREDENTIAL_KEYS);
 
       const valueBucket: relationalStore.ValuesBucket = {
         name: fileSource.name,
         type: fileSource.type,
-        config_json: JSON.stringify(config),
+        config_json: config,
         created_at: fileSource.createdAt
       };
 
@@ -43,8 +42,8 @@ export class FileSourceDao {
       console.info(`FileSourceDatabase: Inserted file source with id ${rowId}`);
       return rowId;
     } catch (error) {
-      console.error('FileSourceDatabase: Failed to insert file source', JSON.stringify(error));
-      throw new Error('Failed to insert file source: ' + JSON.stringify(error));
+      console.error('FileSourceDatabase: Failed to insert file source');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     }
   }
 
@@ -59,27 +58,24 @@ export class FileSourceDao {
     }
 
     try {
-      // 解析配置并加密密码
-      const config = JSON.parse(fileSource.configJson) as Record<string, Object>;
-      if (config.password) {
-        config.password = await CryptoUtil.encrypt(config.password as string);
-      }
+      const raw = await this.credentials.raw(store, TABLE_FILE_SOURCES, fileSource.id);
+      const config = await this.credentials.write(fileSource.configJson, TABLE_FILE_SOURCES, FileSourceDao.CREDENTIAL_KEYS, raw);
 
       const valueBucket: relationalStore.ValuesBucket = {
         name: fileSource.name,
         type: fileSource.type,
-        config_json: JSON.stringify(config),
+        config_json: config,
         created_at: fileSource.createdAt
       };
 
-      const predicates = new relationalStore.RdbPredicates(TABLE_FILE_SOURCES);
-      predicates.equalTo('id', fileSource.id);
+      const predicates = this.credentials.compare(TABLE_FILE_SOURCES, fileSource.id, raw);
 
       const rows = await store.update(valueBucket, predicates);
+      if (rows !== 1) { throw new Error('配置已变更，请重新加载后保存'); }
       console.info(`FileSourceDatabase: Updated ${rows} file source(s)`);
     } catch (error) {
-      console.error('FileSourceDatabase: Failed to update file source', JSON.stringify(error));
-      throw new Error('Failed to update file source: ' + JSON.stringify(error));
+      console.error('FileSourceDatabase: Failed to update file source');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     }
   }
 
@@ -96,8 +92,8 @@ export class FileSourceDao {
       const rows = await store.delete(predicates);
       console.info(`FileSourceDatabase: Deleted ${rows} file source(s)`);
     } catch (error) {
-      console.error('FileSourceDatabase: Failed to delete file source', JSON.stringify(error));
-      throw new Error('Failed to delete file source: ' + JSON.stringify(error));
+      console.error('FileSourceDatabase: Failed to delete file source');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     }
   }
 
@@ -120,8 +116,8 @@ export class FileSourceDao {
 
       return null;
     } catch (error) {
-      console.error('FileSourceDatabase: Failed to get file source by id', JSON.stringify(error));
-      throw new Error('Failed to get file source by id: ' + JSON.stringify(error));
+      console.error('FileSourceDatabase: Failed to get file source by id');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     } finally {
       try { resultSet?.close(); } catch { }
     }
@@ -144,8 +140,8 @@ export class FileSourceDao {
       console.info(`FileSourceDatabase: Retrieved ${fileSources.length} file source(s)`);
       return fileSources;
     } catch (error) {
-      console.error('FileSourceDatabase: Failed to get all file sources', JSON.stringify(error));
-      throw new Error('Failed to get all file sources: ' + JSON.stringify(error));
+      console.error('FileSourceDatabase: Failed to get all file sources');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     } finally {
       try { resultSet?.close(); } catch { }
     }
@@ -162,28 +158,19 @@ export class FileSourceDao {
     const configJson = resultSet.getString(resultSet.getColumnIndex('config_json'));
     const createdAt = resultSet.getLong(resultSet.getColumnIndex('created_at'));
 
-    // 解析配置并解密密码
-    const config = JSON.parse(configJson) as Record<string, Object>;
-    if (config.password) {
-      try {
-        config.password = await CryptoUtil.decrypt(config.password as string);
-      } catch (error) {
-        console.error('FileSourceDatabase: Failed to decrypt password', JSON.stringify(error));
-        // 解密失败时保持加密状态
-      }
-    }
+    const config = await this.credentials.read(this.core.getStore(), TABLE_FILE_SOURCES, id, configJson, FileSourceDao.CREDENTIAL_KEYS);
 
     return {
       id: id,
       name: name,
       type: typeString as FileSourceType,
-      configJson: JSON.stringify(config),
+      configJson: config,
       createdAt: createdAt
     };
     } catch (e) {
       const err = e as BusinessError;
-      hilog.error(0x0000, 'FileSourceDatabase', `parseFileSource 失败: ${err.message}`);
-      throw new Error(err.message);
+      hilog.error(0x0000, 'FileSourceDatabase', 'parseFileSource 失败');
+      throw new Error('数据源配置读取失败，请重试');
     }
   }
 

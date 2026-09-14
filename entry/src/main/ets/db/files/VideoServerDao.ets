@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { VideoServer, VideoServerType } from '../models/VideoServerEntity';
-import { CryptoUtil } from '../../utils/CryptoUtil';
+import { CredentialStorage } from './CredentialStorage';
 import { BusinessError } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TABLE_VIDEO_SERVERS } from './DbConstants';
@@ -12,38 +12,12 @@ import { FileSourceDbCore } from './FileSourceDbCore';
  */
 export class VideoServerDao {
   private core: FileSourceDbCore;
+  private credentials: CredentialStorage;
+  private static readonly CREDENTIAL_KEYS: string[] = ['password', 'apiKey', 'token'];
 
-  constructor(core: FileSourceDbCore) {
+  constructor(core: FileSourceDbCore, credentials: CredentialStorage = new CredentialStorage()) {
     this.core = core;
-  }
-
-  /** 需要加密的敏感配置字段 */
-  private static readonly SENSITIVE_KEYS: string[] = ['password', 'apiKey', 'token'];
-
-  private async encryptSensitive(config: Record<string, Object>): Promise<Record<string, Object>> {
-    for (const key of VideoServerDao.SENSITIVE_KEYS) {
-      const value = config[key];
-      if (typeof value === 'string' && value.length > 0) {
-        config[key] = await CryptoUtil.encrypt(value);
-      }
-    }
-    return config;
-  }
-
-  private async decryptSensitive(config: Record<string, Object>): Promise<Record<string, Object>> {
-    for (const key of VideoServerDao.SENSITIVE_KEYS) {
-      const value = config[key];
-      if (typeof value === 'string' && value.length > 0) {
-        try {
-          config[key] = await CryptoUtil.decrypt(value);
-        } catch (error) {
-          console.error('VideoServerDao: Failed to decrypt sensitive field', key, JSON.stringify(error));
-          // 解密失败时清空该字段，避免密文被当作凭据使用，并在保存时被二次加密导致数据损坏。
-          config[key] = '';
-        }
-      }
-    }
-    return config;
+    this.credentials = credentials;
   }
 
   /**
@@ -53,11 +27,11 @@ export class VideoServerDao {
     const store = this.core.getStore();
 
     try {
-      const config = await this.encryptSensitive(JSON.parse(server.configJson) as Record<string, Object>);
+      const config = await this.credentials.write(server.configJson, TABLE_VIDEO_SERVERS, VideoServerDao.CREDENTIAL_KEYS);
       const valueBucket: relationalStore.ValuesBucket = {
         name: server.name,
         type: server.type,
-        config_json: JSON.stringify(config),
+        config_json: config,
         created_at: server.createdAt
       };
 
@@ -65,8 +39,8 @@ export class VideoServerDao {
       console.info(`VideoServerDao: Inserted video server with id ${rowId}`);
       return rowId;
     } catch (error) {
-      console.error('VideoServerDao: Failed to insert video server', JSON.stringify(error));
-      throw new Error('Failed to insert video server: ' + JSON.stringify(error));
+      console.error('VideoServerDao: Failed to insert video server');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     }
   }
 
@@ -81,22 +55,23 @@ export class VideoServerDao {
     }
 
     try {
-      const config = await this.encryptSensitive(JSON.parse(server.configJson) as Record<string, Object>);
+      const raw = await this.credentials.raw(store, TABLE_VIDEO_SERVERS, server.id);
+      const config = await this.credentials.write(server.configJson, TABLE_VIDEO_SERVERS, VideoServerDao.CREDENTIAL_KEYS, raw);
       const valueBucket: relationalStore.ValuesBucket = {
         name: server.name,
         type: server.type,
-        config_json: JSON.stringify(config),
+        config_json: config,
         created_at: server.createdAt
       };
 
-      const predicates = new relationalStore.RdbPredicates(TABLE_VIDEO_SERVERS);
-      predicates.equalTo('id', server.id);
+      const predicates = this.credentials.compare(TABLE_VIDEO_SERVERS, server.id, raw);
 
       const rows = await store.update(valueBucket, predicates);
+      if (rows !== 1) { throw new Error('配置已变更，请重新加载后保存'); }
       console.info(`VideoServerDao: Updated ${rows} video server(s)`);
     } catch (error) {
-      console.error('VideoServerDao: Failed to update video server', JSON.stringify(error));
-      throw new Error('Failed to update video server: ' + JSON.stringify(error));
+      console.error('VideoServerDao: Failed to update video server');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     }
   }
 
@@ -113,8 +88,8 @@ export class VideoServerDao {
       const rows = await store.delete(predicates);
       console.info(`VideoServerDao: Deleted ${rows} video server(s)`);
     } catch (error) {
-      console.error('VideoServerDao: Failed to delete video server', JSON.stringify(error));
-      throw new Error('Failed to delete video server: ' + JSON.stringify(error));
+      console.error('VideoServerDao: Failed to delete video server');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     }
   }
 
@@ -137,8 +112,8 @@ export class VideoServerDao {
 
       return null;
     } catch (error) {
-      console.error('VideoServerDao: Failed to get video server by id', JSON.stringify(error));
-      throw new Error('Failed to get video server by id: ' + JSON.stringify(error));
+      console.error('VideoServerDao: Failed to get video server by id');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     } finally {
       try { resultSet?.close(); } catch { }
     }
@@ -164,8 +139,8 @@ export class VideoServerDao {
       console.info(`VideoServerDao: Retrieved ${servers.length} video server(s)`);
       return servers;
     } catch (error) {
-      console.error('VideoServerDao: Failed to get all video servers', JSON.stringify(error));
-      throw new Error('Failed to get all video servers: ' + JSON.stringify(error));
+      console.error('VideoServerDao: Failed to get all video servers');
+      throw new Error('数据源操作失败，请重新加载后重试；原凭据不会因读取失败而清空');
     } finally {
       try { resultSet?.close(); } catch { }
     }
@@ -182,19 +157,19 @@ export class VideoServerDao {
       const configJson = resultSet.getString(resultSet.getColumnIndex('config_json'));
       const createdAt = resultSet.getLong(resultSet.getColumnIndex('created_at'));
 
-      const config = await this.decryptSensitive(JSON.parse(configJson) as Record<string, Object>);
+      const config = await this.credentials.read(this.core.getStore(), TABLE_VIDEO_SERVERS, id, configJson, VideoServerDao.CREDENTIAL_KEYS);
 
       return {
         id: id,
         name: name,
         type: typeString as VideoServerType,
-        configJson: JSON.stringify(config),
+        configJson: config,
         createdAt: createdAt
       };
     } catch (e) {
       const err = e as BusinessError;
-      hilog.error(0x0000, 'VideoServerDao', `parseVideoServer 失败: ${err.message}`);
-      throw new Error(err.message);
+      hilog.error(0x0000, 'VideoServerDao', 'parseVideoServer 失败');
+      throw new Error('数据源配置读取失败，请重试');
     }
   }
 }

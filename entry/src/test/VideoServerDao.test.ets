@@ -12,9 +12,8 @@ import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
  *
  * 说明：UnitTestBuild 测试 HAP 的 relationalStore 只支持 DDL（建表）与 SELECT，
  * 不持久化 DML 写入（insert/update/delete 静默失败，store.insert 返回 0），
- * 因此无法在设备端单测中做「插入→回读→解密」回环。敏感凭据加解密回环由
- * VideoServerDao 的 encryptSensitive/decryptSensitive 保证，其正确性依赖
- * CryptoUtil（已在应用侧通过添加影视服务器流程验证）。
+ * 因此这里不声明凭据写入已经验证。真实 HUKS 与两个 DAO 的 DML 回环见
+ * ohosTest/ets/test/CredentialStorage.test.ets，在隔离数据库和测试别名下执行。
  */
 export default function videoServerDaoTest() {
   const isolatedDatabaseName = `FILE_SOURCES_DB_VIDEO_SERVER_TEST_${Date.now()}`;
